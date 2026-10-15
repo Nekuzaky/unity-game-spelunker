@@ -1,0 +1,23 @@
+{
+  "name": "com.nekuzaky.game-spelunker",
+  "version": "0.1.0",
+  "displayName": "Game Spelunker",
+  "description": "Editor window to see how Unity games are built and prepare mods for games that allow them: build report, AssetRipper extraction, import into your project, decompiled script explorer.",
+  "unity": "6000.3",
+  "documentationUrl": "https://github.com/Nekuzaky/game-spelunker#readme",
+  "changelogUrl": "https://github.com/Nekuzaky/game-spelunker/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/Nekuzaky/game-spelunker/blob/main/LICENSE",
+  "keywords": [
+    "editor",
+    "tool",
+    "modding",
+    "assetripper",
+    "extraction",
+    "learning"
+  ],
+  "author": {
+    "name": "Nekuzaky",
+    "url": "https://github.com/Nekuzaky"
+  },
+  "license": "MIT"
+}

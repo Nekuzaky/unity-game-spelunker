@@ -526,3 +526,18 @@
     flex-shrink: 1;
     overflow: hidden;
 }
+
+/* ------------------------------------------------------------- import */
+
+.gs-import {
+    margin: 10px 0 4px 0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: rgba(255, 179, 71, 0.45);
+    background-color: rgba(255, 179, 71, 0.06);
+}
+
+.gs-import .gs-subsection {
+    margin: 0;
+}

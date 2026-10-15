@@ -19,11 +19,13 @@ namespace GameSpelunker
     /// </summary>
     public sealed class SpelunkerWindow : EditorWindow
     {
-        private const string StylePath = "Assets/GameSpelunker/Editor/Spelunker.uss";
+        /// <summary>Asset path of this package, whether it is embedded, installed from git or from a registry.</summary>
+        public const string PackageRoot = "Packages/com.nekuzaky.game-spelunker";
+        private const string StylePath = PackageRoot + "/Editor/Spelunker.uss";
         private const string ConsentKey = "GameSpelunker.Consent";
         private const string LastGameKey = "GameSpelunker.LastGame";
-        private const string IconPath = "Assets/GameSpelunker/Editor/Icons/GameSpelunker.png";
-        private const string TabIconPath = "Assets/GameSpelunker/Editor/Icons/GameSpelunker-tab.png";
+        private const string IconPath = PackageRoot + "/Editor/Icons/GameSpelunker.png";
+        private const string TabIconPath = PackageRoot + "/Editor/Icons/GameSpelunker-tab.png";
         public const string RepositoryUrl = "https://github.com/Nekuzaky/game-spelunker";
 
         private readonly ConcurrentQueue<Action> _mainThread = new ConcurrentQueue<Action>();
@@ -41,6 +43,10 @@ namespace GameSpelunker
         private float _progress;
         private string _scriptFilter = "";
         private string _message = "";
+        private string _importTarget = "";
+        private bool _importScenes = true;
+        private bool _importScripts;
+        private string _importMessage = "";
 
         [MenuItem("Tools/Game Spelunker %#g", priority = 1)]
         public static SpelunkerWindow Open()
@@ -318,6 +324,8 @@ namespace GameSpelunker
             if (version != null && editor == null)
                 card.Add(Hint($"The game was made with Unity {version}, which is not installed. Another version works for exploring, but Unity will upgrade the project."));
 
+            card.Add(ImportSection(version));
+
             // Asset types: AssetRipper groups exported assets in folders named after their type.
             string assets = Path.Combine(ExtractedProject.ProjectFolder(_output), "Assets");
             if (Directory.Exists(assets))
@@ -353,6 +361,91 @@ namespace GameSpelunker
             if (scripts.Count == 0)
                 card.Add(Hint("No game scripts in this export (raw assets mode, or the game has none)."));
             return card;
+        }
+
+        private VisualElement ImportSection(string? exportVersion)
+        {
+            var box = Css(new VisualElement(), "gs-import");
+            var head = Css(new VisualElement(), "gs-card-head");
+            head.Add(Css(new Image { image = Icon("d_Import") }, "gs-card-icon"));
+            head.Add(Css(new Label("Import into this project"), "gs-subsection"));
+            box.Add(head);
+            box.Add(Css(new Label("Copies the extracted assets into a folder of the project you have open, so you can use them in " +
+                                  "your own scenes. Engine shaders, native plugins and project settings are never imported."), "gs-text"));
+
+            if (_importTarget.Length == 0 && _report != null)
+                _importTarget = ProjectImporter.DefaultTarget(_report.Name);
+            var target = new TextField { value = _importTarget, isDelayed = true };
+            target.AddToClassList("gs-path");
+            target.RegisterValueChangedCallback(e => _importTarget = e.newValue);
+            box.Add(Row("Into folder", target));
+
+            var scenes = new Toggle("Scenes") { value = _importScenes };
+            scenes.RegisterValueChangedCallback(e => _importScenes = e.newValue);
+            box.Add(scenes);
+            var scripts = new Toggle("Decompiled scripts (isolated, not compiled until you enable them)") { value = _importScripts };
+            scripts.RegisterValueChangedCallback(e => { _importScripts = e.newValue; Rebuild(); });
+            box.Add(scripts);
+            if (_importScripts && _report != null)
+                box.Add(Hint($"Scripts go into their own assembly that only compiles when the scripting define " +
+                             $"{ProjectImporter.CompileDefine(_report.Name)} is set (Project Settings → Player → Scripting Define Symbols). " +
+                             "Decompiled code often needs fixes before it compiles."));
+
+            if (exportVersion != null && IsNewer(exportVersion, Application.unityVersion))
+                box.Add(Css(new HelpBox($"The game was made with Unity {exportVersion}, newer than this editor ({Application.unityVersion}). " +
+                                        "Some assets may not import correctly.", HelpBoxMessageType.Warning), "gs-card-help"));
+
+            box.Add(Buttons(Button("Import into this project", ImportIntoProject, "gs-button--primary", "d_Import")));
+            if (_importMessage.Length > 0)
+                box.Add(Css(new HelpBox(_importMessage, _importMessage.StartsWith("Failed", StringComparison.Ordinal) ? HelpBoxMessageType.Error : HelpBoxMessageType.Info), "gs-card-help"));
+            return box;
+        }
+
+        private void ImportIntoProject()
+        {
+            if (_report == null) return;
+            string target = _importTarget.Replace('\\', '/').TrimEnd('/');
+            if (Directory.Exists(Path.Combine(Path.GetDirectoryName(Application.dataPath)!, target)) &&
+                !EditorUtility.DisplayDialog("Game Spelunker", $"{target} already exists. Copy into it anyway (files with the same name are replaced)?", "Import", "Cancel"))
+                return;
+            try
+            {
+                var result = ProjectImporter.Import(_output, _report.Name, new ImportOptions
+                {
+                    TargetFolder = target,
+                    IncludeScenes = _importScenes,
+                    IncludeScripts = _importScripts,
+                });
+                var lines = new List<string> { $"Imported {result.FilesCopied} file(s) into {result.TargetFolder}." };
+                if (result.GuidConflicts > 0)
+                    lines.Add($"{result.GuidConflicts} file(s) skipped: their GUID is already used in this project.");
+                if (result.SkippedFolders.Count > 0)
+                    lines.Add("Not imported: " + string.Join(", ", result.SkippedFolders) + ".");
+                if (result.ScriptsDefine != null)
+                    lines.Add($"Scripts are not compiled until you add the define {result.ScriptsDefine}.");
+                if (result.MissingPackages.Count > 0)
+                    lines.Add("The game used packages this project does not have: " + string.Join(", ", result.MissingPackages) +
+                              ". Add them with the Package Manager if some assets look broken.");
+                _importMessage = string.Join("\n", lines);
+                var folder = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(result.TargetFolder);
+                if (folder != null) EditorGUIUtility.PingObject(folder);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException)
+            {
+                _importMessage = "Failed: " + ex.Message;
+            }
+            Rebuild();
+        }
+
+        /// <summary>Compares Unity versions like 2022.3.21f1 and 6000.3.13f1 on their numeric parts.</summary>
+        private static bool IsNewer(string a, string b)
+        {
+            static int[] Parts(string v) => System.Text.RegularExpressions.Regex.Matches(v, @"\d+").Cast<System.Text.RegularExpressions.Match>().Select(m => int.Parse(m.Value)).ToArray();
+            var x = Parts(a);
+            var y = Parts(b);
+            for (int i = 0; i < Math.Min(x.Length, y.Length); i++)
+                if (x[i] != y[i]) return x[i] > y[i];
+            return x.Length > y.Length;
         }
 
         private void RefreshScriptList(VisualElement card, List<ExtractedScript> scripts)
@@ -412,6 +505,8 @@ namespace GameSpelunker
             _reportError = null;
             _output = "";
             _message = "";
+            _importTarget = "";
+            _importMessage = "";
             _log.Clear();
             try
             {

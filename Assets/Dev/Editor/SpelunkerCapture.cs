@@ -8,7 +8,7 @@ namespace GameSpelunker
 {
     /// <summary>
     /// Screenshots of the window for the README. Needs a screen (not batch mode):
-    /// <c>Unity -projectPath GameSpelunker.Unity -executeMethod GameSpelunker.SpelunkerCapture.Run
+    /// <c>Unity -projectPath &lt;repository root&gt; -executeMethod GameSpelunker.SpelunkerCapture.Run
     /// -gsGame &lt;game&gt; -gsExport &lt;existing extraction&gt; -gsShots &lt;folder&gt;</c>. Unity quits when done.
     /// </summary>
     public static class SpelunkerCapture

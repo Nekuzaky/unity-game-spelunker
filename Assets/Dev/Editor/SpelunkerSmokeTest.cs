@@ -9,7 +9,7 @@ namespace GameSpelunker
 {
     /// <summary>
     /// Batch-mode end-to-end check: inspects a build, extracts it with AssetRipper and checks that scripts came back.
-    /// <c>Unity -batchmode -projectPath GameSpelunker.Unity -executeMethod GameSpelunker.SpelunkerSmokeTest.Run
+    /// <c>Unity -batchmode -projectPath &lt;repository root&gt; -executeMethod GameSpelunker.SpelunkerSmokeTest.Run
     /// -gsGame &lt;game folder&gt; -gsOut &lt;output folder&gt; [-gsAssetRipper &lt;AssetRipper.GUI.Free.exe&gt;]</c>
     /// </summary>
     public static class SpelunkerSmokeTest
@@ -54,7 +54,17 @@ namespace GameSpelunker
                 var project = ExtractedProject.ProjectFolder(output);
                 Debug.Log($"[Game Spelunker] Project folder: {project}, version {ExtractedProject.UnityVersionOf(output)}");
 
-                bool ok = scripts.Count > 0;
+                // Import into this project, scripts included (isolated behind a define), then clean up.
+                string target = ProjectImporter.DefaultTarget("Smoke Test");
+                var import = ProjectImporter.Import(output, report.Name, new ImportOptions { TargetFolder = target, IncludeScripts = true });
+                string asmdef = Directory.GetFiles(Path.Combine(Path.GetDirectoryName(Application.dataPath)!, target, "Scripts"), "*.asmdef").FirstOrDefault() ?? "none";
+                Debug.Log($"[Game Spelunker] Imported {import.FilesCopied} file(s) into {import.TargetFolder}, {import.GuidConflicts} GUID conflict(s), " +
+                          $"skipped [{string.Join(", ", import.SkippedFolders)}], scripts assembly {Path.GetFileName(asmdef)} behind {import.ScriptsDefine}, " +
+                          $"missing packages [{string.Join(", ", import.MissingPackages)}]");
+                bool imported = import.FilesCopied > 0 && asmdef != "none" && AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(target) != null;
+                AssetDatabase.DeleteAsset("Assets/Spelunked");
+
+                bool ok = scripts.Count > 0 && imported;
                 Debug.Log(ok ? "[Game Spelunker] Smoke test passed." : "[Game Spelunker] Smoke test FAILED: no scripts exported.");
                 EditorApplication.Exit(ok ? 0 : 1);
             }

@@ -6,6 +6,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ## [0.1.0] - 2026-10-15
 
 ### Added
+- Distributed as a Unity package (`com.nekuzaky.game-spelunker`), installable from a git URL in Unity 6000.3 or newer.
+- Import into the open project: assets copied into `Assets/Spelunked/<Game>` with their references, engine shaders,
+  plugins and settings left out, GUID conflicts skipped, optional scripts isolated behind a scripting define.
 - Game Spelunker window (**Tools → Game Spelunker**, `Ctrl+Shift+G`) with a usage notice to accept before extracting.
 - Build report read from game files: Unity version, Mono / IL2CPP, render pipeline, scenes, size, asset bundles,
   game assemblies, native plugins and installed mod loaders.
