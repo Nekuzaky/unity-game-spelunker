@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/AssetRipper/AssetRipper/issues
     about: Problems with how a specific asset is extracted are usually best reported to AssetRipper.
   - name: Security report
-    url: https://github.com/Nekuzaky/game-spelunker/security/advisories/new
+    url: https://github.com/Nekuzaky/unity-game-spelunker/security/advisories/new
     about: Report security problems privately.

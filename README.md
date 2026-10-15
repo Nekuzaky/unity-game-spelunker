@@ -30,24 +30,27 @@ working on, and helps you explore the decompiled scripts.
 In Unity **6000.3 or newer**: **Window → Package Manager → + → Install package from git URL…** and paste:
 
 ```
-https://github.com/Nekuzaky/game-spelunker.git?path=Packages/com.nekuzaky.game-spelunker#v0.1.0
+https://github.com/Nekuzaky/unity-game-spelunker.git?path=Packages/com.nekuzaky.game-spelunker#v0.1.0
 ```
 
 Then open **Tools → Game Spelunker** (`Ctrl+Shift+G`). The first time, accept the usage notice and click
 **Install AssetRipper** (44 MB, downloaded from github.com/AssetRipper).
 
-To always get the latest version, drop `#v0.1.0` from the URL. Tested with Unity 6000.3.13f1 and 6000.5.9f1.
+To always get the latest version, drop `#v0.1.0` from the URL. Tested with Unity 6000.3.13f1 and 6000.5.9f1. The old repository address (`game-spelunker`) redirects here.
 
 ## Features
 
-| | |
-|---|---|
-| 🔎 **Find games** | Lists the Unity games installed through Steam (all libraries), Epic Games, GOG and itch.io — or pick any folder. |
-| 🩻 **Build report** | Without running the game: Unity version (and whether you have it), Mono / IL2CPP, render pipeline, scenes, size, asset bundles, game assemblies, native plugins, installed mod loaders (BepInEx, MelonLoader, Doorstop…). |
-| ⛏️ **One-click AssetRipper** | Downloads the official AssetRipper release on request — never bundled — or uses a copy you already have. |
-| 📦 **Extract** | As a Unity project (scenes, prefabs, materials, decompiled scripts) or as raw assets (PNG, models, sounds), with progress, log and cancel. |
-| 📥 **Import into your project** | Copies the extracted assets into `Assets/Spelunked/<Game>` of the project you have open, keeping references between assets. |
-| 🕯️ **Explore** | Open the export in the matching Unity version, see what's inside by asset type, search the game's scripts and open them in your code editor. |
+- **Find games** — lists the Unity games installed through Steam (all libraries), Epic Games, GOG and itch.io, or pick any folder.
+- **Build report** — without running the game: Unity version (and whether you have it), Mono / IL2CPP, render pipeline,
+  scenes, size, asset bundles, game assemblies, native plugins, installed mod loaders (BepInEx, MelonLoader, Doorstop…).
+- **One-click AssetRipper** — downloads the official AssetRipper release on request (never bundled), or uses a copy you
+  already have.
+- **Extract** — as a Unity project (scenes, prefabs, materials, decompiled scripts) or as raw assets (PNG, models, sounds),
+  with progress, log and cancel.
+- **Import into your project** — copies the extracted assets into `Assets/Spelunked/<Game>` of the project you have open,
+  keeping references between assets.
+- **Explore** — open the export in the matching Unity version, see what's inside by asset type, search the game's scripts
+  and open them in your code editor.
 
 ## Importing into your project
 
@@ -114,7 +117,7 @@ everything came back. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pu
 ## Support the project
 
 If Game Spelunker helps you, you can support its development on
-[Patreon](https://www.patreon.com/Nekuzaky) or [Buy Me a Coffee](https://www.buymeacoffee.com/Nekuzaky). ⭐ Stars help too!
+[Patreon](https://www.patreon.com/Nekuzaky) or [Buy Me a Coffee](https://www.buymeacoffee.com/Nekuzaky). Stars help too!
 
 ## Credits
 

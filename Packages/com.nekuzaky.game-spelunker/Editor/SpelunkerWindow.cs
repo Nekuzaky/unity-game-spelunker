@@ -26,7 +26,7 @@ namespace GameSpelunker
         private const string LastGameKey = "GameSpelunker.LastGame";
         private const string IconPath = PackageRoot + "/Editor/Icons/GameSpelunker.png";
         private const string TabIconPath = PackageRoot + "/Editor/Icons/GameSpelunker-tab.png";
-        public const string RepositoryUrl = "https://github.com/Nekuzaky/game-spelunker";
+        public const string RepositoryUrl = "https://github.com/Nekuzaky/unity-game-spelunker";
 
         private readonly ConcurrentQueue<Action> _mainThread = new ConcurrentQueue<Action>();
         private readonly List<string> _log = new List<string>();
