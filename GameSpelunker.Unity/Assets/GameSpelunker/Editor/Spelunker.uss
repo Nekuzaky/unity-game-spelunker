@@ -1,0 +1,119 @@
+/* Game Spelunker window. Uses the editor theme, so it follows the light and dark skins. */
+
+.gs-page > .unity-scroll-view__content-viewport > .unity-scroll-view__content-container {
+    padding: 10px 12px 20px 12px;
+}
+
+.gs-title {
+    font-size: 18px;
+    -unity-font-style: bold;
+}
+
+.gs-subtitle {
+    opacity: 0.7;
+    margin-bottom: 8px;
+    white-space: normal;
+}
+
+.gs-section {
+    margin-top: 16px;
+    margin-bottom: 4px;
+    padding-bottom: 3px;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: rgb(70, 160, 255);
+    border-bottom-width: 1px;
+    border-bottom-color: var(--unity-colors-default-border);
+}
+
+.gs-subsection {
+    margin-top: 10px;
+    -unity-font-style: bold;
+}
+
+.gs-hint {
+    opacity: 0.65;
+    font-size: 11px;
+    white-space: normal;
+    margin: 2px 0 6px 0;
+}
+
+.gs-row {
+    flex-direction: row;
+    align-items: flex-start;
+    min-height: 20px;
+    margin: 2px 0;
+}
+
+.gs-label {
+    width: 130px;
+    min-width: 130px;
+    opacity: 0.75;
+    padding-top: 1px;
+}
+
+.gs-field {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin: 0;
+}
+
+.gs-wrap {
+    white-space: normal;
+}
+
+.gs-buttons {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin: 4px 0;
+}
+
+.gs-button {
+    margin: 2px 4px 2px 0;
+    padding: 3px 10px;
+}
+
+.gs-button--primary {
+    background-color: rgb(40, 110, 200);
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
+}
+
+.gs-button--primary:hover {
+    background-color: rgb(55, 128, 225);
+}
+
+.gs-button--primary:disabled {
+    opacity: 0.45;
+}
+
+.gs-button--danger {
+    background-color: rgb(150, 50, 50);
+    color: rgb(255, 255, 255);
+}
+
+.gs-list-item {
+    background-color: rgba(127, 127, 127, 0.08);
+    border-width: 0;
+    border-radius: 3px;
+    margin: 1px 0;
+    padding: 4px 8px;
+    -unity-text-align: middle-left;
+}
+
+.gs-list-item:hover {
+    background-color: rgba(127, 127, 127, 0.2);
+}
+
+.gs-list-item--selected {
+    background-color: rgba(70, 160, 255, 0.3);
+}
+
+.gs-log {
+    margin-top: 6px;
+    padding: 6px;
+    border-radius: 3px;
+    background-color: rgba(0, 0, 0, 0.25);
+    font-size: 10px;
+    white-space: normal;
+}

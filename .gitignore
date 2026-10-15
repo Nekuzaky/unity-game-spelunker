@@ -1,0 +1,18 @@
+# Unity (generated)
+**/[Ll]ibrary/
+**/[Tt]emp/
+**/[Ll]ogs/
+**/[Oo]bj/
+**/[Uu]ser[Ss]ettings/
+**/MemoryCaptures/
+*.csproj
+*.sln
+*.slnx
+
+# Built test game and local tools
+TestGame/Build/
+tools/
+
+# Never commit extracted games
+**/ExportedProject/
+**/AuxiliaryFiles/
