@@ -15,6 +15,7 @@ namespace GameSpelunker
         public bool Compiles;
         public int Rounds;
         public int MembersStubbed;
+        public int MembersRenamed;
         public int FilesQuarantined;
         public int RemainingErrors;
         public string Log = "";
@@ -49,15 +50,28 @@ namespace GameSpelunker
                     await RunUnityAsync(editor, project, log, token).ConfigureAwait(false);
                     var errors = ReadErrors(log);
                     File.WriteAllLines(Path.Combine(Path.GetDirectoryName(log)!, $"GameSpelunker-compile-pass{round}.txt"),
-                        ReadShared(log).Split('\n').Where(l => l.Contains(": error CS")).Select(l => l.Trim()).Distinct());
+                        ReadShared(log).Split('\n').Where(l => l.Contains("error CS")).Select(l => l.Trim()).Distinct());
                     result.RemainingErrors = errors.Sum(e => e.Value.Count);
                     if (errors.Count == 0)
                     {
-                        result.Compiles = true;
+                        var global = ReadShared(log).Split('\n').Select(l => l.Trim()).Where(l => l.StartsWith("error CS")).Distinct().ToList();
+                        result.Compiles = global.Count == 0;
+                        result.RemainingErrors = global.Count;
+                        if (global.Count > 0)
+                            report.AppendLine("Errors not tied to a script:\n" + string.Join("\n", global));
                         break;
                     }
                     progress?.Report($"Neutralising what does not compile (pass {round}, {result.RemainingErrors} error(s))…");
-                    foreach (var file in errors)
+                    if (!errors.Keys.Any(IsGameCode))
+                        break;
+                    var renamed = RenameMembersNamedLikeTheirType(project, ReadShared(log));
+                    if (renamed.Count > 0)
+                    {
+                        result.MembersRenamed += renamed.Count;
+                        foreach (var r in renamed) report.AppendLine(r);
+                        continue;
+                    }
+                    foreach (var file in errors.Where(e => IsGameCode(e.Key)))
                     {
                         string path = Path.Combine(project, file.Key);
                         if (!File.Exists(path))
@@ -82,7 +96,7 @@ namespace GameSpelunker
                 File.WriteAllText(settings, original);
                 result.Log = report.ToString();
                 File.WriteAllText(Path.Combine(exportFolder, "AuxiliaryFiles", "GameSpelunker-code-fixes.txt"),
-                    $"Compiles: {result.Compiles} after {result.Rounds} pass(es); {result.MembersStubbed} member(s) stubbed, " +
+                    $"Compiles: {result.Compiles} after {result.Rounds} pass(es); {result.MembersRenamed} member(s) renamed, {result.MembersStubbed} member(s) stubbed, " +
                     $"{result.FilesQuarantined} file(s) quarantined.\n\n" + result.Log);
             }
             return result;
@@ -123,6 +137,62 @@ namespace GameSpelunker
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var reader = new StreamReader(stream);
             return reader.ReadToEnd();
+        }
+
+        private static bool IsGameCode(string file) =>
+            file.StartsWith("Assets/Scripts/", StringComparison.OrdinalIgnoreCase) || file.StartsWith("Assets/Plugins/", StringComparison.OrdinalIgnoreCase);
+
+        private static readonly Regex SameNameAsType = new Regex(@"^(Assets[\\/][^(]+\.cs)\((\d+),\d+\): error CS0542", RegexOptions.Compiled | RegexOptions.Multiline);
+
+        private static List<string> RenameMembersNamedLikeTheirType(string project, string log)
+        {
+            var done = new List<string>();
+            var gameFiles = new[] { "Scripts", "Plugins" }.Select(f => Path.Combine(project, "Assets", f)).Where(Directory.Exists)
+                .SelectMany(f => Directory.GetFiles(f, "*.cs", SearchOption.AllDirectories)).ToList();
+            foreach (var group in SameNameAsType.Matches(log).Cast<Match>()
+                         .Select(m => (file: m.Groups[1].Value.Replace('\\', '/'), line: int.Parse(m.Groups[2].Value)))
+                         .Where(e => IsGameCode(e.file)).Distinct().GroupBy(e => e.file))
+            {
+                string path = Path.Combine(project, group.Key);
+                if (!File.Exists(path))
+                    continue;
+                var lines = File.ReadAllLines(path);
+                string whole = string.Join("\n", lines);
+                var names = new List<string>();
+                foreach (var (_, line) in group)
+                {
+                    if (line < 1 || line > lines.Length)
+                        continue;
+                    string text = lines[line - 1];
+                    var name = Regex.Matches(text, @"\b[A-Za-z_]\w*\b").Cast<Match>().Select(m => m.Value)
+                        .FirstOrDefault(id => Regex.IsMatch(whole, @"\b(class|struct)\s+" + id + @"\b")
+                                              && Regex.IsMatch(text, @"(?<!new\s+)(?<!class\s+)(?<!struct\s+)\b" + id + @"\b(?=\s*[\(;={])"));
+                    if (name == null)
+                        continue;
+                    lines[line - 1] = Regex.Replace(text, @"(?<!new\s+)(?<!class\s+)(?<!struct\s+)\b" + name + @"\b(?=\s*[\(;={])", name + "_");
+                    names.Add(name);
+                }
+                if (names.Count == 0)
+                    continue;
+                string updated = string.Join("\n", lines);
+                foreach (var name in names.Distinct())
+                {
+                    updated = Regex.Replace(updated, @"\.\s*" + name + @"\b", "." + name + "_");
+                    string declaration = @"\b[\w<>\[\],\.]+\s+" + name + @"\s*[;=\({]";
+                    bool declaredElsewhere = gameFiles.Where(f => !string.Equals(Path.GetFullPath(f), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
+                        .Any(f => Regex.IsMatch(File.ReadAllText(f), declaration));
+                    if (!declaredElsewhere)
+                        foreach (var other in gameFiles.Where(f => !string.Equals(Path.GetFullPath(f), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase)))
+                        {
+                            string source = File.ReadAllText(other);
+                            string renamed = Regex.Replace(source, @"\.\s*" + name + @"\b", "." + name + "_");
+                            if (renamed != source) File.WriteAllText(other, renamed);
+                        }
+                    done.Add($"{group.Key}: member {name} renamed to {name}_" + (declaredElsewhere ? " (callers in other files left as they are)" : ""));
+                }
+                File.WriteAllText(path, updated);
+            }
+            return done;
         }
 
         private static Dictionary<string, List<int>> ReadErrors(string log)

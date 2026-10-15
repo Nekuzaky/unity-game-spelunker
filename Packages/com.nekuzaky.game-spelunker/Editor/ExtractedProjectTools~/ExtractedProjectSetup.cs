@@ -22,13 +22,20 @@ namespace GameSpelunker
         {
             if (!File.Exists(Marker))
                 EditorApplication.delayCall += RepairOnce;
-            if (!Application.isBatchMode)
-                EditorApplication.playModeStateChanged += WarnBeforePlay;
+#if UNITY_2017_2_OR_NEWER
+            if (!UnityEditorInternal.InternalEditorUtility.inBatchMode && HasGameCodeSwitch())
+                EditorApplication.playModeStateChanged += change => { if (change == PlayModeStateChange.ExitingEditMode) WarnBeforePlay(); };
+#endif
         }
 
-        private static void WarnBeforePlay(PlayModeStateChange change)
+        private static bool HasGameCodeSwitch()
         {
-            if (change != PlayModeStateChange.ExitingEditMode || GameCodeEnabled())
+            return File.Exists("Assets/Scripts/Spelunked.GameCode.asmdef") || File.Exists("Assets/Plugins/Spelunked.GameCode.FirstPass.asmdef");
+        }
+
+        private static void WarnBeforePlay()
+        {
+            if (GameCodeEnabled())
                 return;
             int choice = EditorUtility.DisplayDialogComplex("Game Spelunker",
                 "The game's code is switched off in this project, so Play mode runs none of it: every game component reports " +
@@ -45,7 +52,11 @@ namespace GameSpelunker
 
         private static void RepairOnce()
         {
+#if UNITY_2017_1_OR_NEWER
             if (EditorApplication.isCompiling || EditorApplication.isUpdating)
+#else
+            if (EditorApplication.isCompiling)
+#endif
             {
                 EditorApplication.delayCall += RepairOnce;
                 return;
@@ -55,7 +66,7 @@ namespace GameSpelunker
 
             var report = Repair();
             Debug.Log("[Game Spelunker] " + report.Summary);
-            if (!GameCodeEnabled())
+            if (HasGameCodeSwitch() && !GameCodeEnabled())
                 Debug.Log("[Game Spelunker] The game's decompiled code is switched off: scenes, prefabs and assets work, but " +
                           "nothing runs in Play mode. Tools > Game Spelunker > Enable Game Code compiles it (it often needs fixes).");
         }
@@ -81,13 +92,13 @@ namespace GameSpelunker
         }
 
         [MenuItem("Tools/Game Spelunker/Enable Game Code", true)]
-        private static bool CanEnableGameCode() { return !GameCodeEnabled(); }
+        private static bool CanEnableGameCode() { return HasGameCodeSwitch() && !GameCodeEnabled(); }
 
         [MenuItem("Tools/Game Spelunker/Disable Game Code", false, 101)]
         private static void DisableGameCode() { SetGameCode(false); }
 
         [MenuItem("Tools/Game Spelunker/Disable Game Code", true)]
-        private static bool CanDisableGameCode() { return GameCodeEnabled(); }
+        private static bool CanDisableGameCode() { return HasGameCodeSwitch() && GameCodeEnabled(); }
 
         private static bool GameCodeEnabled()
         {

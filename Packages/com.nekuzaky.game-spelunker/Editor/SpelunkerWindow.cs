@@ -708,17 +708,18 @@ namespace GameSpelunker
                                 _progress = p;
                                 _busyText = $"Importing into Unity and repairing… {p:P0} (large games take several minutes)";
                             }));
-                            string summary = await ExtractedProject.ImportAndRepairAsync(output, editor, importProgress, token).ConfigureAwait(false);
-                            done += " Imported into Unity and repaired, ready to open: " + summary + gameCode;
-                            if (prepared.GameCodeOff)
+                            string codeReport = "";
+                            if (prepared.HasGameCode)
                             {
-                                var compileProgress = new Progress<string>(m => RunOnMain(() => { _progress = 0.99f; _busyText = m; }));
+                                var compileProgress = new Progress<string>(m => RunOnMain(() => { _progress = 0f; _busyText = m; }));
                                 var code = await GameCodeCompiler.MakeItCompileAsync(output, editor, compileProgress, token).ConfigureAwait(false);
-                                done += code.Compiles
-                                    ? $" The game's code compiles once enabled ({code.MembersStubbed} member(s) that could not be decompiled were stubbed, " +
+                                codeReport = code.Compiles
+                                    ? $" The game's code compiles ({code.MembersStubbed} member(s) that could not be decompiled were stubbed, " +
                                       $"{code.FilesQuarantined} file(s) set aside; see AuxiliaryFiles/GameSpelunker-code-fixes.txt)."
-                                    : $" The game's code still has {code.RemainingErrors} compile error(s) once enabled (see AuxiliaryFiles/GameSpelunker-code-fixes.txt).";
+                                    : $" The game's code still has {code.RemainingErrors} compile error(s) (see AuxiliaryFiles/GameSpelunker-code-fixes.txt).";
                             }
+                            string summary = await ExtractedProject.ImportAndRepairAsync(output, editor, importProgress, token).ConfigureAwait(false);
+                            done += " Imported into Unity and repaired, ready to open: " + summary + gameCode + codeReport;
                         }
                         else
                         {

@@ -17,12 +17,38 @@ namespace GameSpelunker
 
         static SpawnPreview()
         {
-            if (Application.isBatchMode)
+            if (UnityEditorInternal.InternalEditorUtility.inBatchMode)
                 return;
+#if UNITY_2017_2_OR_NEWER
             EditorSceneManager.sceneOpened += (scene, mode) => Show(scene, false);
             EditorApplication.playModeStateChanged += OnPlayModeChanged;
+#else
+            EditorApplication.hierarchyWindowChanged += OnHierarchyChanged;
+            EditorApplication.playmodeStateChanged += OnPlaymodeChanged;
+#endif
             EditorApplication.delayCall += ShowAll;
         }
+
+#if !UNITY_2017_2_OR_NEWER
+        private static string _lastScenes = "";
+
+        private static void OnHierarchyChanged()
+        {
+            string scenes = "";
+            for (int i = 0; i < SceneManager.sceneCount; i++)
+                scenes += SceneManager.GetSceneAt(i).path + ";";
+            if (scenes == _lastScenes)
+                return;
+            _lastScenes = scenes;
+            ShowAll();
+        }
+
+        private static void OnPlaymodeChanged()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode && !EditorApplication.isPlaying) HideAll();
+            else if (!EditorApplication.isPlayingOrWillChangePlaymode) ShowAll();
+        }
+#endif
 
         private static string PrefKey
         {
@@ -50,11 +76,13 @@ namespace GameSpelunker
             return !EditorApplication.isPlayingOrWillChangePlaymode;
         }
 
+#if UNITY_2017_2_OR_NEWER
         private static void OnPlayModeChanged(PlayModeStateChange change)
         {
             if (change == PlayModeStateChange.ExitingEditMode) HideAll();
             else if (change == PlayModeStateChange.EnteredEditMode) ShowAll();
         }
+#endif
 
         private static void ShowAll()
         {

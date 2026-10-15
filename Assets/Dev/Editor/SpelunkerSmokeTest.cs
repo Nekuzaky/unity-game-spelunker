@@ -118,17 +118,41 @@ namespace GameSpelunker
                 var prepared = ExtractedProject.PrepareForOpening(output, ExtractedProject.ToolsSource(), report.DataFolder);
                 Debug.Log($"[Game Spelunker] Prepared: {prepared.NativeLibrariesAdded} native libraries, {prepared.ScriptsFixed} scripts fixed, {prepared.LibrariesSwitchedOff} libraries behind the define, {prepared.UnreadableRemoved} unreadable assets removed, " +
                           $"{prepared.ObsoleteComponentsRemoved} obsolete components removed");
-                var importStarted = DateTime.UtcNow;
-                string ready = ExtractedProject.ImportAndRepairAsync(output, ExtractedProject.EditorFor(output, EditorApplication.applicationPath), null, CancellationToken.None)
-                    .GetAwaiter().GetResult();
-                Debug.Log($"[Game Spelunker] Imported and repaired in {(DateTime.UtcNow - importStarted).TotalMinutes:0.0} min: {ready}");
+                string editor = ExtractedProject.EditorFor(output, EditorApplication.applicationPath);
+                Debug.Log($"[Game Spelunker] Target editor: {editor}; same version as the game: {prepared.SameVersionAsGame}, APIs migrated: {prepared.MigratesApis}");
                 var compileStarted = DateTime.UtcNow;
-                var code = GameCodeCompiler.MakeItCompileAsync(output, ExtractedProject.EditorFor(output, EditorApplication.applicationPath), null, CancellationToken.None)
+                var code = GameCodeCompiler.MakeItCompileAsync(output, editor, new Progress<string>(m => Debug.Log("[Game Spelunker] " + m)), CancellationToken.None)
                     .GetAwaiter().GetResult();
                 Debug.Log($"[Game Spelunker] Game code compiles: {code.Compiles} in {(DateTime.UtcNow - compileStarted).TotalMinutes:0.0} min, {code.Rounds} pass(es), " +
                           $"{code.MembersStubbed} stubbed, {code.FilesQuarantined} quarantined, {code.RemainingErrors} error(s) left");
+                var importStarted = DateTime.UtcNow;
+                string ready = ExtractedProject.ImportAndRepairAsync(output, editor, null, CancellationToken.None).GetAwaiter().GetResult();
+                Debug.Log($"[Game Spelunker] Imported and repaired in {(DateTime.UtcNow - importStarted).TotalMinutes:0.0} min: {ready}");
                 Debug.Log($"[Game Spelunker] Extracted {report.Name} (Unity {report.UnityVersion}) in {(DateTime.UtcNow - started).TotalMinutes:0.0} min; " +
                           $"{prepared.ScriptsStopped} script(s) stopped in edit mode, {prepared.GeneratedRemoved} generated removed");
+                EditorApplication.Exit(0);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex is AggregateException ae && ae.InnerException != null ? ae.InnerException : ex);
+                EditorApplication.Exit(1);
+            }
+        }
+
+        public static void Finish()
+        {
+            try
+            {
+                string export = Arg("-gsExport") ?? throw new ArgumentException("-gsExport is required");
+                var prepared = ExtractedProject.PrepareForOpening(export, ExtractedProject.ToolsSource());
+                string editor = ExtractedProject.EditorFor(export, EditorApplication.applicationPath);
+                Debug.Log($"[Game Spelunker] Prepared again; target editor: {editor}; same version as the game: {prepared.SameVersionAsGame}");
+                var code = GameCodeCompiler.MakeItCompileAsync(export, editor, new Progress<string>(m => Debug.Log("[Game Spelunker] " + m)), CancellationToken.None)
+                    .GetAwaiter().GetResult();
+                Debug.Log($"[Game Spelunker] Game code compiles: {code.Compiles}, {code.Rounds} pass(es), {code.MembersStubbed} stubbed, " +
+                          $"{code.FilesQuarantined} quarantined, {code.RemainingErrors} error(s) left");
+                string ready = ExtractedProject.ImportAndRepairAsync(export, editor, null, CancellationToken.None).GetAwaiter().GetResult();
+                Debug.Log($"[Game Spelunker] Imported and repaired: {ready}");
                 EditorApplication.Exit(0);
             }
             catch (Exception ex)
@@ -161,8 +185,8 @@ namespace GameSpelunker
             try
             {
                 string project = Arg("-gsProject") ?? throw new ArgumentException("-gsProject is required");
-                int scripts = ExtractedProject.FixDecompiledCode(Path.Combine(project, "Assets", "Scripts"));
-                int plugins = ExtractedProject.FixDecompiledCode(Path.Combine(project, "Assets", "Plugins"));
+                int scripts = ExtractedProject.FixDecompiledCode(Path.Combine(project, "Assets", "Scripts"), true);
+                int plugins = ExtractedProject.FixDecompiledCode(Path.Combine(project, "Assets", "Plugins"), true);
                 Debug.Log($"[Game Spelunker] Decompiled code fixed: {scripts} script(s), {plugins} plugin script(s)");
                 EditorApplication.Exit(0);
             }
@@ -178,11 +202,14 @@ namespace GameSpelunker
             try
             {
                 string export = Arg("-gsExport") ?? throw new ArgumentException("-gsExport is required");
-                var prepared = ExtractedProject.PrepareForOpening(export, ExtractedProject.ToolsSource());
+                string? game = Arg("-gsGame");
+                var prepared = ExtractedProject.PrepareForOpening(export, ExtractedProject.ToolsSource(),
+                    game != null ? BuildInspector.Inspect(game).DataFolder : null);
                 Debug.Log($"[Game Spelunker] Prepared {export}: {prepared.ScriptsStopped} script(s) stopped in edit mode, " +
                           $"{prepared.GeneratedRemoved} generated removed, {prepared.AssemblyInfoRemoved} AssemblyInfo removed, " +
                           $"{prepared.LibrariesAdded} libraries added, game code off: {prepared.GameCodeOff}, tools installed: {prepared.ToolsInstalled}, " +
-                          $"objects spawned by code: {prepared.SpawnedObjects}");
+                          $"objects spawned by code: {prepared.SpawnedObjects}, scripts fixed: {prepared.ScriptsFixed}, native libraries: {prepared.NativeLibrariesAdded}, " +
+                          $"cursor textures: {prepared.CursorTextures}");
                 EditorApplication.Exit(0);
             }
             catch (Exception ex)

@@ -306,13 +306,12 @@ namespace GameSpelunker
         private static int ResetGraphicsShaders(Dictionary<string, string> placeholders)
         {
             int reset = 0;
-            var types = new[]
+            var names = new[] { "DeferredShading", "DeferredReflections", "ScreenSpaceShadows", "DepthNormals", "MotionVectors", "LightHalo", "LensFlare" };
+            foreach (string typeName in names)
             {
-                BuiltinShaderType.DeferredShading, BuiltinShaderType.DeferredReflections, BuiltinShaderType.ScreenSpaceShadows,
-                BuiltinShaderType.DepthNormals, BuiltinShaderType.MotionVectors, BuiltinShaderType.LightHalo, BuiltinShaderType.LensFlare,
-            };
-            foreach (var type in types)
-            {
+                if (!Enum.IsDefined(typeof(BuiltinShaderType), typeName))
+                    continue;
+                var type = (BuiltinShaderType)Enum.Parse(typeof(BuiltinShaderType), typeName);
                 if (GraphicsSettings.GetShaderMode(type) != BuiltinShaderMode.UseCustom)
                     continue;
                 var custom = GraphicsSettings.GetCustomShader(type);
@@ -552,8 +551,10 @@ namespace GameSpelunker
             return false;
         }
 
-        private static bool IsCodeDriven(string shader) =>
-            Regex.IsMatch(shader, "^hidden/|postfx|post effect|posteffect|imageeffect|image effect|^ui/|^gui/|sprite|font|textmeshpro|blit|underwater|mask|depth");
+        private static bool IsCodeDriven(string shader)
+        {
+            return Regex.IsMatch(shader, "^hidden/|postfx|post effect|posteffect|imageeffect|image effect|^ui/|^gui/|sprite|font|textmeshpro|blit|underwater|mask|depth");
+        }
 
         private static Shader LitShader(Pipeline pipeline, bool specular, Dictionary<string, Shader> real)
         {
