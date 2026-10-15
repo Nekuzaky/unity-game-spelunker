@@ -12,17 +12,10 @@ namespace GameSpelunker
 {
     public enum ExportMode
     {
-        /// <summary>A Unity project you can open: scenes, prefabs, materials, decompiled scripts.</summary>
         UnityProject,
-        /// <summary>Plain files: images, models, sounds, text, without a project around them.</summary>
         PrimaryContent,
     }
 
-    /// <summary>
-    /// Runs AssetRipper headless on a local port and drives it through its HTTP API:
-    /// POST /LoadFolder (Path) then POST /Export/UnityProject or /Export/PrimaryContent (Path).
-    /// Each request returns once the work is done. Output lines are forwarded through <see cref="Log"/>.
-    /// </summary>
     public sealed class AssetRipperSession : IDisposable
     {
         private static readonly Regex ProgressPattern = new Regex(@"^(\w+Progress)\s*:\s*\((\d+)/(\d+)\)\s*(.*)$", RegexOptions.Compiled);
@@ -32,9 +25,7 @@ namespace GameSpelunker
         private HttpClient? _http;
         private int _port;
 
-        /// <summary>Every line AssetRipper prints. Raised on a worker thread.</summary>
         public event Action<string>? Log;
-        /// <summary>(phase, done, total, item), parsed from AssetRipper's progress lines. Raised on a worker thread.</summary>
         public event Action<string, int, int, string>? Progress;
 
         public AssetRipperSession(string executable)
@@ -69,7 +60,6 @@ namespace GameSpelunker
                 Timeout = TimeSpan.FromHours(2),
             };
 
-            // Wait until the local server answers.
             var deadline = DateTime.UtcNow.AddSeconds(60);
             while (DateTime.UtcNow < deadline)
             {
@@ -90,7 +80,6 @@ namespace GameSpelunker
             throw new TimeoutException("AssetRipper did not start within 60 seconds.");
         }
 
-        /// <summary>Loads a game: the folder that contains the executable, or its *_Data folder.</summary>
         public Task LoadAsync(string path, CancellationToken token) => PostPath("LoadFolder", path, token);
 
         public Task ExportAsync(string outputFolder, ExportMode mode, CancellationToken token) =>
@@ -108,7 +97,6 @@ namespace GameSpelunker
 
             using var content = new FormUrlEncodedContent(fields);
             using var response = await _http.PostAsync(route, content, token).ConfigureAwait(false);
-            // AssetRipper answers each command with a redirect to its home page once the work is finished.
             if (response.StatusCode != HttpStatusCode.Redirect && response.StatusCode != HttpStatusCode.Found && !response.IsSuccessStatusCode)
                 throw new HttpRequestException($"AssetRipper /{route} failed: {(int)response.StatusCode} {response.ReasonPhrase}");
         }

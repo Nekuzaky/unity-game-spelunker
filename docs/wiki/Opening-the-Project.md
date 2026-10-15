@@ -19,6 +19,8 @@ The project to open is the **`ExportedProject`** folder inside the output folder
 
 Right after a **Unity project** extraction (and again before **Open in Unity**), Game Spelunker makes the project safer and nicer to open:
 
+- **The game's code is switched off.** Decompiled code rarely compiles as-is, and while a project has compile errors Unity runs none of its editor tools and asks about Safe Mode. The decompiled scripts are put in two assemblies, `Spelunked.GameCode` and `Spelunked.GameCode.FirstPass`, that only compile when the define `SPELUNKER_GAME_CODE` is set. The project opens without errors; scenes, prefabs and assets are all there, and components keep their values and their link to their script. To try the game's code, use **Tools → Game Spelunker → Enable Game Code** in that project, then fix the errors that appear; **Disable Game Code** switches it off again.
+- **What the code needs is put back**: libraries the game shipped but AssetRipper left out (for example `Boo.Lang.dll`, `UnityScript.Lang.dll`) are copied from the game into `Assets/Plugins`, and the duplicate `AssemblyInfo.cs` files of each decompiled assembly are removed.
 - **Game code only runs in Play mode.** Decompiled scripts marked `[ExecuteInEditMode]` or `[ExecuteAlways]` — post effects, weather, water, UI — would run inside the editor with none of the objects they expect, flood the Console with errors and can even crash Unity. The attribute is replaced by a comment (`ExecuteInEditMode removed by Game Spelunker`), so these scripts wait for Play mode.
 - **Build-generated code is removed**: files such as `__JobReflectionRegistrationOutput__*.cs`, which Burst generated for the game and which clash with the code Unity generates for the project.
 - **Materials are repaired the first time the project opens.** AssetRipper cannot recover most shaders: it writes placeholders that draw one flat texture, so the game looks grey, white or pink. Game Spelunker installs a small tool in `Assets/GameSpelunker/Editor` that, on first open:
@@ -27,7 +29,9 @@ Right after a **Unity project** extraction (and again before **Open in Unity**),
   - gives terrains a terrain shader, particles a particle shader, and custom skies Unity's procedural sky;
   - turns water, lakes and oceans into a tinted, glossy, see-through surface;
   - leaves alone what only game code can drive (post effects, underwater effects, masks, UI, text);
-  - renames placeholders that hid a built-in shader, such as the one the terrain uses for grass.
+  - renames placeholders that hid a built-in shader, such as the one the terrain uses for grass;
+  - sets the rendering shaders of *Project Settings → Graphics* (deferred lighting, reflections, screen-space shadows…) back to Unity's own when the game had custom ones AssetRipper could not recover — otherwise the whole scene renders black;
+  - remembers, in each material's `.meta`, the shader it was made with: running the repair again (for example after updating Game Spelunker) rebuilds every material from its original, not from a previous repair.
 
   The result is written to `ProjectSettings/GameSpelunker.txt`. Run it again on any folder with **right-click → Game Spelunker → Repair Materials**. Original shader effects (wind, wetness, triplanar…) cannot come back, but every object shows its own textures and lighting.
 
@@ -36,7 +40,8 @@ Right after a **Unity project** extraction (and again before **Open in Unity**),
 | What you see | Why, and what to do |
 | :--- | :--- |
 | **A long import** | Unity imports every texture, model and sound of the game. Large games take several minutes. |
-| **"Enter Safe Mode?"** | Decompiled code often has compile errors. Choose **Ignore** to explore scenes and assets anyway, or **Enter Safe Mode** to fix the scripts first. |
+| **Nothing happens in Play mode** | The game's code is switched off (see above). Even with it on, an extracted game rarely plays like the original: shaders, services (Steam, online), and code that was generated at build time are missing. Use Play mode to inspect objects, not to play. |
+| **"Enter Safe Mode?"** | Only after **Enable Game Code**: the decompiled code has compile errors. Choose **Ignore** to keep exploring, or **Enter Safe Mode** to fix the scripts. **Disable Game Code** brings the project back to a clean state. |
 | **No scene is open** | Open one from `Assets/Scenes` (or search `t:Scene` in the Project window). |
 | **A progress bar "Repairing materials…"** | The material repair described above, once. Large games have thousands of materials: it can take a few minutes. |
 | **Pink, grey or white objects** | The repair could not place a material (it uses an effect only the game's code drives). Select the material and pick *Standard* or *Universal Render Pipeline/Lit*: its textures are still there. |

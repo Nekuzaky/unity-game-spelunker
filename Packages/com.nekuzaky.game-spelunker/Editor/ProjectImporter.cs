@@ -10,15 +10,9 @@ namespace GameSpelunker
 {
     public sealed class ImportOptions
     {
-        /// <summary>Project folder to import into, e.g. "Assets/Spelunked/My Game".</summary>
         public string TargetFolder = "";
         public bool IncludeScenes = true;
-        /// <summary>
-        /// Copies the decompiled scripts under an assembly that only compiles once the define named by
-        /// <see cref="ProjectImporter.CompileDefine"/> is added, so they can never break the project.
-        /// </summary>
         public bool IncludeScripts;
-        /// <summary>Moves imported materials off the shaders AssetRipper could not recover (see <see cref="MaterialRepair"/>).</summary>
         public bool RepairMaterials = true;
     }
 
@@ -33,20 +27,13 @@ namespace GameSpelunker
         public MaterialRepairReport? Materials;
     }
 
-    /// <summary>
-    /// Copies an AssetRipper export into the open project, keeping .meta files so references between assets survive.
-    /// Never touches project settings, and skips what could break or bloat the host project: engine shaders, native
-    /// plugins, editor folders, assets whose GUID already exists here, and (unless asked) the decompiled scripts.
-    /// </summary>
     public static class ProjectImporter
     {
-        /// <summary>Folders of an AssetRipper export that are never imported.</summary>
         private static readonly HashSet<string> AlwaysSkipped = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "Shader", "ComputeShader", "Plugins", "Editor", "Editor Default Resources", "Gizmos", "StreamingAssets",
         };
 
-        /// <summary>Folder names with a special meaning in Unity, renamed so they behave like plain folders here.</summary>
         private static readonly Dictionary<string, string> SpecialFolders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["Resources"] = "Resources (imported)",
@@ -60,7 +47,6 @@ namespace GameSpelunker
             return "Assets/Spelunked/" + (safe.Length == 0 ? "Game" : safe);
         }
 
-        /// <summary>The scripting define that turns on compilation of imported scripts for a game.</summary>
         public static string CompileDefine(string gameName) =>
             "SPELUNKER_COMPILE_" + Regex.Replace(gameName.ToUpperInvariant(), @"[^A-Z0-9]", "_");
 
@@ -87,7 +73,6 @@ namespace GameSpelunker
                     bool isScripts = name.Equals("Scripts", StringComparison.OrdinalIgnoreCase);
                     bool isScenes = name.Equals("Scenes", StringComparison.OrdinalIgnoreCase);
 
-                    // Game Spelunker's own tools, installed in the export: this project already has them.
                     if (name.Equals(ExtractedProject.ToolsFolder, StringComparison.Ordinal))
                         continue;
                     if (AlwaysSkipped.Contains(name) || (isScripts && !options.IncludeScripts) || (isScenes && !options.IncludeScenes))
@@ -104,6 +89,11 @@ namespace GameSpelunker
 
                 if (options.IncludeScripts && Directory.Exists(Path.Combine(target, "Scripts")))
                 {
+                    foreach (var asmdef in Directory.GetFiles(Path.Combine(target, "Scripts"), "*.asmdef", SearchOption.AllDirectories))
+                    {
+                        File.Delete(asmdef);
+                        if (File.Exists(asmdef + ".meta")) File.Delete(asmdef + ".meta");
+                    }
                     result.ScriptsDefine = CompileDefine(gameName);
                     WriteScriptsAssembly(Path.Combine(target, "Scripts"), gameName, result.ScriptsDefine);
                     ExtractedProject.StopEditModeExecution(Path.Combine(target, "Scripts"));
@@ -121,7 +111,6 @@ namespace GameSpelunker
             return result;
         }
 
-        /// <summary>Shader names by guid, read from the export: the import leaves shaders out, materials still name them.</summary>
         private static Dictionary<string, string> ShaderNames(string shaderFolder)
         {
             var names = new Dictionary<string, string>();
@@ -148,7 +137,6 @@ namespace GameSpelunker
                 if (file.EndsWith(".meta", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                // An asset whose GUID is already used here would hijack references in the host project: skip it.
                 string meta = file + ".meta";
                 if (File.Exists(meta) && ReadGuid(meta) is { } guid && !string.IsNullOrEmpty(AssetDatabase.GUIDToAssetPath(guid)))
                 {
@@ -176,10 +164,6 @@ namespace GameSpelunker
             return null;
         }
 
-        /// <summary>
-        /// One assembly for all imported scripts, compiled only when the define is present: the scripts can be read and
-        /// prefabs keep their script references, but nothing compiles (or fails to compile) until the user opts in.
-        /// </summary>
         private static void WriteScriptsAssembly(string scriptsFolder, string gameName, string define)
         {
             string assemblyName = "Spelunked." + Regex.Replace(gameName, @"[^A-Za-z0-9]", "");
@@ -196,7 +180,6 @@ namespace GameSpelunker
                           "}\n";
             File.WriteAllText(Path.Combine(scriptsFolder, assemblyName + ".asmdef"), json);
 
-            // Assembly-level files from the decompiled assemblies would clash once merged into one assembly.
             foreach (var info in Directory.GetFiles(scriptsFolder, "AssemblyInfo.cs", SearchOption.AllDirectories))
             {
                 File.Delete(info);
@@ -204,7 +187,6 @@ namespace GameSpelunker
             }
         }
 
-        /// <summary>Packages the game used (from the export's manifest) that this project does not have.</summary>
         public static List<string> MissingPackages(string exportFolder)
         {
             string exported = Path.Combine(ExtractedProject.ProjectFolder(exportFolder), "Packages", "manifest.json");

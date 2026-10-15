@@ -13,13 +13,8 @@ using UnityEngine.UIElements;
 
 namespace GameSpelunker
 {
-    /// <summary>
-    /// Tools → Game Spelunker: pick a Unity game, read its build report, extract it with AssetRipper and explore the
-    /// result (decompiled scripts, asset types). Meant for learning how games are built and for modding games that allow it.
-    /// </summary>
     public sealed class SpelunkerWindow : EditorWindow
     {
-        /// <summary>Asset path of this package, whether it is embedded, installed from git or from a registry.</summary>
         public const string PackageRoot = "Packages/com.nekuzaky.game-spelunker";
         private const string StylePath = PackageRoot + "/Editor/Spelunker.uss";
         private const string ConsentKey = "GameSpelunker.Consent";
@@ -31,7 +26,6 @@ namespace GameSpelunker
 
         private readonly ConcurrentQueue<Action> _mainThread = new ConcurrentQueue<Action>();
         private readonly List<string> _log = new List<string>();
-        /// <summary>Game icons by game folder (null: none found), loaded once: the UI is rebuilt often.</summary>
         private readonly Dictionary<string, Texture2D?> _gameIcons = new Dictionary<string, Texture2D?>(StringComparer.OrdinalIgnoreCase);
 
         private string _gamePath = "";
@@ -77,7 +71,6 @@ namespace GameSpelunker
             _gameIcons.Clear();
         }
 
-        /// <summary>The game's icon from the launcher's local cache, or null.</summary>
         private Texture2D? GameIcon(string folder)
         {
             if (_gameIcons.TryGetValue(folder, out var cached))
@@ -113,8 +106,6 @@ namespace GameSpelunker
         }
 
         private void RunOnMain(Action action) => _mainThread.Enqueue(action);
-
-        // ---------------------------------------------------------------- UI
 
         private void Rebuild()
         {
@@ -262,10 +253,6 @@ namespace GameSpelunker
             return card;
         }
 
-        /// <summary>
-        /// AssetRipper's status, folded away: it installs itself on the first extraction, so most users never open it.
-        /// Opens by itself when there is something to do by hand (no build for this computer).
-        /// </summary>
         private VisualElement AssetRipperSection()
         {
             string? exe = AssetRipperInstaller.Executable;
@@ -379,7 +366,6 @@ namespace GameSpelunker
 
             card.Add(ImportSection(version));
 
-            // Asset types: AssetRipper groups exported assets in folders named after their type.
             string assets = Path.Combine(ExtractedProject.ProjectFolder(_output), "Assets");
             if (Directory.Exists(assets))
             {
@@ -493,7 +479,6 @@ namespace GameSpelunker
             Rebuild();
         }
 
-        /// <summary>Compares Unity versions like 2022.3.21f1 and 6000.3.13f1 on their numeric parts.</summary>
         private static bool IsNewer(string a, string b)
         {
             static int[] Parts(string v) => System.Text.RegularExpressions.Regex.Matches(v, @"\d+").Cast<System.Text.RegularExpressions.Match>().Select(m => int.Parse(m.Value)).ToArray();
@@ -536,18 +521,14 @@ namespace GameSpelunker
             return "d_DefaultAsset Icon";
         }
 
-        // ---------------------------------------------------------------- actions
-
-        /// <summary>Shows a game and an existing extraction without user input (screenshots, tests).</summary>
         public void ShowForCapture(string game, string exportFolder)
         {
             SelectGame(game, rebuild: false);
             _output = exportFolder;
-            _found = null; // never show the local game library in screenshots
+            _found = null;
             Rebuild();
         }
 
-        /// <summary>Scrolls the page to the top or the bottom (screenshots).</summary>
         public void ScrollTo(bool end)
         {
             var page = rootVisualElement.Q<ScrollView>();
@@ -629,7 +610,6 @@ namespace GameSpelunker
             if (_report == null)
                 return;
 
-            // Only ever clean a folder that holds a previous extraction, never an arbitrary folder.
             if (Directory.Exists(_output) && Directory.EnumerateFileSystemEntries(_output).Any())
             {
                 bool previousExport = Directory.Exists(Path.Combine(_output, "ExportedProject")) || Directory.Exists(Path.Combine(_output, "AuxiliaryFiles"))
@@ -648,8 +628,8 @@ namespace GameSpelunker
             var report = _report;
             string output = _output;
             var mode = _mode;
-            string? installed = AssetRipperInstaller.Executable; // EditorPrefs: read here, not in the task
-            string tools = ExtractedProject.ToolsSource();       // Package Manager API: main thread too
+            string? installed = AssetRipperInstaller.Executable;
+            string tools = ExtractedProject.ToolsSource();
             bool download = installed == null;
             _busy = true;
             _busyText = download ? DownloadText : "Starting AssetRipper…";
@@ -662,7 +642,6 @@ namespace GameSpelunker
 
             Task.Run(async () =>
             {
-                // First extraction on this computer: fetch AssetRipper, then carry on with the same click.
                 string exe;
                 try
                 {
@@ -678,7 +657,7 @@ namespace GameSpelunker
                     return;
                 }
                 RunOnMain(() => { _progress = 0; _busyText = "Starting AssetRipper…"; });
-                var started = DateTime.Now; // the download does not count in the extraction time
+                var started = DateTime.Now;
 
                 using var session = new AssetRipperSession(exe);
                 session.Log += line => RunOnMain(() =>
@@ -704,9 +683,10 @@ namespace GameSpelunker
                     if (mode == ExportMode.UnityProject)
                     {
                         var prepared = ExtractedProject.PrepareForOpening(output, tools);
-                        done += $" Ready to open: {prepared.ScriptsStopped} script(s) set to run in Play mode only" +
-                                (prepared.GeneratedRemoved > 0 ? $", {prepared.GeneratedRemoved} build-generated file(s) removed" : "") +
-                                ", materials repaired on first open.";
+                        done += " Ready to open: materials repaired on first open" +
+                                (prepared.GameCodeOff ? "; the game's decompiled code is switched off so the project always compiles " +
+                                                        "(Tools → Game Spelunker → Enable Game Code in that project)" : "") +
+                                (prepared.LibrariesAdded > 0 ? $"; {prepared.LibrariesAdded} library(ies) it needs copied from the game" : "") + ".";
                     }
                     RunOnMain(() => _message = done);
                 }
@@ -726,8 +706,6 @@ namespace GameSpelunker
             Rebuild();
         }
 
-        // ---------------------------------------------------------------- helpers
-
         private static T Css<T>(T element, string classNames) where T : VisualElement
         {
             foreach (var c in classNames.Split(' '))
@@ -735,13 +713,12 @@ namespace GameSpelunker
             return element;
         }
 
-        /// <summary>Built-in editor icon, matching the editor skin; null when Unity does not have it.</summary>
         private static Texture? Icon(string name)
         {
             string light = name.StartsWith("d_", StringComparison.Ordinal) ? name.Substring(2) : name;
             string wanted = EditorGUIUtility.isProSkin ? "d_" + light : light;
             var previous = Debug.unityLogger.logEnabled;
-            Debug.unityLogger.logEnabled = false; // IconContent logs an error for unknown names.
+            Debug.unityLogger.logEnabled = false;
             try
             {
                 return EditorGUIUtility.IconContent(wanted)?.image ?? EditorGUIUtility.IconContent(light)?.image;
@@ -752,7 +729,6 @@ namespace GameSpelunker
             }
         }
 
-        /// <summary>A step card: icon, title, optional status chip, then its content.</summary>
         private static VisualElement Card(string icon, string title, (string text, string style)? chip = null)
         {
             var card = Css(new VisualElement(), "gs-card");

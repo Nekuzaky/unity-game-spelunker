@@ -8,7 +8,6 @@ using UnityEditor;
 
 namespace GameSpelunker
 {
-    /// <summary>A decompiled script found in an extracted project.</summary>
     public sealed class ExtractedScript
     {
         public string Path = "";
@@ -17,20 +16,18 @@ namespace GameSpelunker
         public string ClassName = "";
     }
 
-    /// <summary>What <see cref="ExtractedProject.PrepareForOpening"/> changed.</summary>
     public sealed class PrepareResult
     {
-        /// <summary>Scripts that no longer run in the editor.</summary>
         public int ScriptsStopped;
-        /// <summary>Build-generated scripts removed.</summary>
         public int GeneratedRemoved;
+        public int AssemblyInfoRemoved;
+        public int LibrariesAdded;
+        public bool GameCodeOff;
         public bool ToolsInstalled;
     }
 
-    /// <summary>Helpers for an AssetRipper export folder (ExportedProject/ + AuxiliaryFiles/).</summary>
     public static class ExtractedProject
     {
-        /// <summary>Assemblies AssetRipper also exports but that are part of the engine or packages, not the game.</summary>
         private static readonly string[] EngineAssemblies = { "Unity.", "UnityEngine", "Cinemachine", "TextMeshPro", "DOTween", "Mono.", "System" };
 
         public static string ProjectFolder(string exportFolder)
@@ -47,7 +44,6 @@ namespace GameSpelunker
             return m.Success ? m.Groups[1].Value : null;
         }
 
-        /// <summary>The game's own decompiled scripts (Assets/Scripts/&lt;Assembly&gt;/…), engine and package code excluded.</summary>
         public static List<ExtractedScript> FindScripts(string exportFolder)
         {
             string scriptsRoot = Path.Combine(ProjectFolder(exportFolder), "Assets", "Scripts");
@@ -76,7 +72,6 @@ namespace GameSpelunker
             return result.OrderBy(s => s.RelativePath, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
-        /// <summary>The Unity editor installed through Unity Hub for a version, or null.</summary>
         public static string? FindEditor(string? version)
         {
             if (version == null) return null;
@@ -93,16 +88,12 @@ namespace GameSpelunker
         private static readonly Regex EditModeAttributeInList = new Regex(
             @"(?:UnityEngine\.)?(?:ExecuteInEditMode|ExecuteAlways)(?:Attribute)?\s*(?:\(\s*\))?\s*,\s*|,\s*(?:UnityEngine\.)?(?:ExecuteInEditMode|ExecuteAlways)(?:Attribute)?\s*(?:\(\s*\))?(?=\s*\])",
             RegexOptions.Compiled);
-        // No brackets in the note: a second pass must not match it again.
         private const string EditModeNote = "/* ExecuteInEditMode removed by Game Spelunker: this code only runs in Play mode */";
 
-        /// <summary>Code the game's build generated (Burst, Jobs): it clashes with the code Unity generates for the project.</summary>
         private static readonly string[] GeneratedScripts = { "__JobReflectionRegistrationOutput__", "__UnmanagedPostProcessorOutput__", "__BurstDirectCallInitializer" };
 
-        /// <summary>Folder of Assets where <see cref="PrepareForOpening"/> installs Game Spelunker's tools in an export.</summary>
         public const string ToolsFolder = "GameSpelunker";
 
-        /// <summary>The package's Editor folder on disk, wherever the package is installed. Main thread only.</summary>
         public static string ToolsSource()
         {
             var info = UnityEditor.PackageManager.PackageInfo.FindForAssetPath(SpelunkerWindow.PackageRoot);
@@ -110,11 +101,6 @@ namespace GameSpelunker
             return Path.Combine(root, "Editor");
         }
 
-        /// <summary>
-        /// Makes an extraction safe to open: game scripts stop running in the editor (decompiled [ExecuteInEditMode] code
-        /// can crash it), build-generated code is removed, and the material repair is installed to run on first open.
-        /// Safe to call again.
-        /// </summary>
         public static PrepareResult PrepareForOpening(string exportFolder, string toolsSource)
         {
             var result = new PrepareResult();
@@ -123,6 +109,40 @@ namespace GameSpelunker
                 return result;
 
             string scripts = Path.Combine(assets, "Scripts");
+            string plugins = Path.Combine(assets, "Plugins");
+
+            foreach (var root in new[] { scripts, plugins }.Where(Directory.Exists))
+                foreach (var info in Directory.GetFiles(root, "AssemblyInfo.cs", SearchOption.AllDirectories)
+                             .Where(f => Path.GetFileName(Path.GetDirectoryName(f)) == "Properties"))
+                {
+                    File.Delete(info);
+                    if (File.Exists(info + ".meta")) File.Delete(info + ".meta");
+                    result.AssemblyInfoRemoved++;
+                }
+
+            string gameAssemblies = Path.Combine(exportFolder, "AuxiliaryFiles", "GameAssemblies");
+            if (Directory.Exists(gameAssemblies))
+            {
+                var present = new HashSet<string>(Directory.GetFiles(assets, "*.dll", SearchOption.AllDirectories).Select(Path.GetFileName),
+                    StringComparer.OrdinalIgnoreCase);
+                foreach (var dll in Directory.GetFiles(gameAssemblies, "*.dll"))
+                {
+                    string name = Path.GetFileName(dll);
+                    if (present.Contains(name) || NeverCopied.Any(p => name.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+                        continue;
+                    Directory.CreateDirectory(plugins);
+                    File.Copy(dll, Path.Combine(plugins, name));
+                    result.LibrariesAdded++;
+                }
+            }
+
+            bool firstPass = HasScripts(plugins);
+            if (firstPass)
+                WriteGameCodeAssembly(Path.Combine(plugins, GameCodeFirstPass + ".asmdef"), GameCodeFirstPass, null);
+            if (HasScripts(scripts))
+                WriteGameCodeAssembly(Path.Combine(scripts, GameCode + ".asmdef"), GameCode, firstPass ? GameCodeFirstPass : null);
+            result.GameCodeOff = firstPass || HasScripts(scripts);
+
             if (Directory.Exists(scripts))
             {
                 foreach (var file in Directory.GetFiles(scripts, "*.cs", SearchOption.AllDirectories))
@@ -141,14 +161,33 @@ namespace GameSpelunker
             Directory.CreateDirectory(tools);
             File.Copy(Path.Combine(toolsSource, "MaterialRepair.cs"), Path.Combine(tools, "MaterialRepair.cs"), true);
             File.Copy(Path.Combine(toolsSource, "ExtractedProjectTools~", "ExtractedProjectSetup.cs"), Path.Combine(tools, "ExtractedProjectSetup.cs"), true);
-            // Its own editor assembly: it compiles even when the decompiled game code does not.
             File.WriteAllText(Path.Combine(tools, "GameSpelunker.ExtractedTools.asmdef"),
                 "{\n    \"name\": \"GameSpelunker.ExtractedTools\",\n    \"includePlatforms\": [\"Editor\"],\n    \"autoReferenced\": false\n}\n");
             result.ToolsInstalled = true;
             return result;
         }
 
-        /// <summary>Removes [ExecuteInEditMode] / [ExecuteAlways] from the scripts in a folder. Returns the files changed.</summary>
+        public const string GameCodeDefine = "SPELUNKER_GAME_CODE";
+        private const string GameCode = "Spelunked.GameCode";
+        private const string GameCodeFirstPass = "Spelunked.GameCode.FirstPass";
+
+        private static readonly string[] NeverCopied = { "UnityEngine", "Unity.", "System", "Mono.", "mscorlib", "netstandard", "Microsoft.", "Assembly-" };
+
+        private static bool HasScripts(string folder) =>
+            Directory.Exists(folder) && Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories).Any();
+
+        private static void WriteGameCodeAssembly(string path, string name, string? reference)
+        {
+            string references = reference != null ? $"\"{reference}\"" : "";
+            File.WriteAllText(path,
+                "{\n" +
+                $"    \"name\": \"{name}\",\n" +
+                $"    \"references\": [{references}],\n" +
+                "    \"allowUnsafeCode\": true,\n" +
+                $"    \"defineConstraints\": [\"{GameCodeDefine}\"]\n" +
+                "}\n");
+        }
+
         public static int StopEditModeExecution(string folder)
         {
             int changed = 0;
@@ -166,7 +205,6 @@ namespace GameSpelunker
             return changed;
         }
 
-        /// <summary>Opens the extracted project in a new Unity instance (the matching version when installed).</summary>
         public static void OpenInUnity(string exportFolder)
         {
             PrepareForOpening(exportFolder, ToolsSource());

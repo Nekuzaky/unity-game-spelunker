@@ -11,8 +11,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   open: back on the real Unity shader when the game used a stock one, otherwise rebuilt on Standard, URP Lit or HDRP
   Lit with their textures, cut-out for foliage, a terrain shader for terrains, a particle shader for particles,
   Unity's procedural sky for custom skies and a tinted see-through surface for water.
-  Placeholders that hid a built-in shader (the terrain's grass shader, Standard (Specular setup)) are renamed. Imports
+  Placeholders that hid a built-in shader (the terrain's grass shader, Standard (Specular setup)) are renamed, and
+  graphics settings that pointed to placeholders (custom deferred lighting…) are set back to Unity's own shaders.
+  Each material remembers its original shader in its .meta, so a later run rebuilds it from the original. Imports
   into your project are repaired the same way, and **Assets → Game Spelunker → Repair Materials** runs it on any folder.
+- The game's decompiled code is switched off in extracted projects (two assemblies behind the define
+  `SPELUNKER_GAME_CODE`), so the project always compiles and its editor tools, the material repair included, run.
+  **Tools → Game Spelunker → Enable / Disable Game Code** in the extracted project. Libraries the code needs that
+  AssetRipper left out (Boo, UnityScript…) are copied from the game, and duplicate `AssemblyInfo.cs` files are removed.
 - Extracted projects are prepared before they open: game scripts no longer run in the editor (`[ExecuteInEditMode]` and
   `[ExecuteAlways]` are removed), so decompiled post effects, weather or UI code can no longer flood the Console or
   crash Unity, and code generated for the game's build (`__JobReflectionRegistrationOutput__…`) is removed.

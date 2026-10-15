@@ -6,11 +6,6 @@ using UnityEngine;
 
 namespace GameSpelunker
 {
-    /// <summary>
-    /// Screenshots of the window for the README. Needs a screen (not batch mode):
-    /// <c>Unity -projectPath &lt;repository root&gt; -executeMethod GameSpelunker.SpelunkerCapture.Run
-    /// -gsGame &lt;game&gt; -gsExport &lt;existing extraction&gt; -gsShots &lt;folder&gt;</c>. Unity quits when done.
-    /// </summary>
     public static class SpelunkerCapture
     {
         private const string ConsentKey = "GameSpelunker.Consent";
@@ -78,8 +73,6 @@ namespace GameSpelunker
             int height = Mathf.RoundToInt(screenRect.height * scale);
             var pixels = InternalEditorUtility.ReadScreenPixel(new Vector2(screenRect.x * scale, screenRect.y * scale), width, height);
 
-            // The screen is read as-is: if another window covers Unity, the capture would show it. Keep the image
-            // only when the window header (dark purple band at the top) is really there.
             var header = new Color(28 / 255f, 22 / 255f, 40 / 255f);
             int matches = 0, samples = 0;
             for (int y = height - Mathf.RoundToInt(70 * scale); y < height - Mathf.RoundToInt(30 * scale); y += 2)

@@ -15,7 +15,6 @@ namespace GameSpelunker
         IL2CPP,
     }
 
-    /// <summary>What a Unity game build is made of, read from its files without running it.</summary>
     public sealed class BuildReport
     {
         public string GameFolder = "";
@@ -37,25 +36,15 @@ namespace GameSpelunker
         public List<string> Warnings = new List<string>();
     }
 
-    /// <summary>
-    /// Recognises a Unity build (Windows, macOS or Linux layout) and describes it: engine version, scripting backend,
-    /// render pipeline, game assemblies, plugins and installed mod loaders.
-    /// </summary>
     public static class BuildInspector
     {
-        /// <summary>
-        /// Unity versions: 3.x to 5.x (5.6.5p4), 2017 to 2023 (2022.3.21f1), then 6000 (6000.3.13f1). Asset bundles
-        /// also carry the format string "5.x.x", which has no digits after the major and is not matched.
-        /// </summary>
         private static readonly Regex VersionPattern = new Regex(@"(?<!\d)(?:20\d\d|6\d{3}|[345])\.\d+\.\d+[abfpx]\d+", RegexOptions.Compiled);
 
-        /// <summary>Assemblies that ship with every Unity game: not interesting when learning about a specific game.</summary>
         private static readonly string[] EnginePrefixes =
         {
             "UnityEngine", "Unity.", "System", "Mono.", "mscorlib", "netstandard", "Microsoft.", "nunit", "Newtonsoft.Json",
         };
 
-        /// <summary>Finds the "_Data" folder from a game folder, an executable or the data folder itself; null if not a Unity build.</summary>
         public static string? FindDataFolder(string path)
         {
             if (File.Exists(path))
@@ -70,7 +59,6 @@ namespace GameSpelunker
             if (candidates.Count > 0)
                 return candidates.OrderBy(c => c.Length).First();
 
-            // macOS app bundle: Game.app/Contents/Resources/Data
             var mac = Path.Combine(path, "Contents", "Resources", "Data");
             return IsDataFolder(mac) ? mac : null;
         }
@@ -118,7 +106,6 @@ namespace GameSpelunker
             if (lines.Length >= 2) report.Name = lines[1];
         }
 
-        /// <summary>The engine version, from the serialized-file header of globalgamemanagers / data.unity3d, else UnityPlayer.dll.</summary>
         private static string? ReadUnityVersion(BuildReport report)
         {
             foreach (var file in new[] { "globalgamemanagers", "data.unity3d", "mainData", "level0" })

@@ -1,6 +1,3 @@
-// Game Spelunker: material repair for extracted games.
-// This file is also copied into extracted projects (Assets/GameSpelunker/Editor), which may be opened with an older
-// Unity: keep it self-contained and within C# 6 (no tuples, no out var, no pattern matching, no nullable annotations).
 #if UNITY_2020_2_OR_NEWER
 #nullable disable
 #endif
@@ -15,21 +12,16 @@ using UnityEngine.Rendering;
 
 namespace GameSpelunker
 {
-    /// <summary>What <see cref="MaterialRepair.Run"/> did.</summary>
     public sealed class MaterialRepairReport
     {
-        /// <summary>Put back on the real Unity shader they were made for (same name).</summary>
         public int Restored;
-        /// <summary>Rebuilt on the pipeline's lit shader, with their textures.</summary>
         public int Rebuilt;
         public int Terrain;
         public int Particles;
-        /// <summary>Custom skies moved to Unity's procedural sky.</summary>
         public int Skies;
-        /// <summary>Effects driven by code, UI, text: left as they are.</summary>
         public int Skipped;
-        /// <summary>Placeholders renamed so they stop hiding the real shader of the same name.</summary>
         public int ShadersRenamed;
+        public int GraphicsShadersReset;
         public string LitShader = "";
 
         public string Summary
@@ -41,16 +33,12 @@ namespace GameSpelunker
                     return "No broken material found.";
                 return string.Format("{0} material(s) repaired: {1} back on their original Unity shader, {2} rebuilt on {3}, " +
                                      "{4} terrain, {5} particle, {6} sky. {7} left as they are (effects driven by code, UI, text).",
-                    total, Restored, Rebuilt, LitShader, Terrain, Particles, Skies, Skipped);
+                    total, Restored, Rebuilt, LitShader, Terrain, Particles, Skies, Skipped) +
+                       (GraphicsShadersReset > 0 ? string.Format(" {0} rendering shader(s) of the graphics settings set back to Unity's own.", GraphicsShadersReset) : "");
             }
         }
     }
 
-    /// <summary>
-    /// AssetRipper cannot recover most shaders: it writes placeholders (marked DummyShaderTextExporter) that draw one
-    /// unlit texture, so extracted games look flat, grey or white. This moves every material that uses a placeholder (or
-    /// a missing shader) to a real shader of the project's render pipeline and carries its textures over.
-    /// </summary>
     public static class MaterialRepair
     {
         private const string DummyMarker = "DummyShaderTextExporter";
@@ -62,7 +50,7 @@ namespace GameSpelunker
         private const string NotColor = "normal|bump|nrm|spec|gloss|metal|rough|detail|mask|noise|flow|foam|emiss|illum|occlu|height|parallax|splat|control|cube|refl|lightmap|ramp|lut|wind|dissolve|trans";
         private const string FoliagePattern = "cutout|alphatest|alpha test|foliage|leaf|leaves|grass|fern|bush|plant|billboard|branch|ivy|vine|hair|fence|stipple|tree";
         private const string TransparentPattern = "transparent|glass|alpha blended|fade|window";
-        private const string WaterPattern = "water|ocean|lake|river";
+        private const string WaterPattern = "(^|/)\\s*(water|ocean|lake|river)";
 
         private enum Pipeline { BuiltIn, Universal, HighDefinition }
 
@@ -71,6 +59,74 @@ namespace GameSpelunker
             public Texture Texture;
             public Vector2 Scale = Vector2.one;
             public Vector2 Offset = Vector2.zero;
+        }
+
+        private sealed class Memo
+        {
+            private const string Prefix = "GameSpelunker|";
+            private static readonly string[] Overwritten = { "_Glossiness", "_Smoothness" };
+
+            public string Shader = "";
+            public string[] Keywords = new string[0];
+            public int Queue = -1;
+            public readonly Dictionary<string, float> Floats = new Dictionary<string, float>();
+
+            public static Memo From(string shader, Saved saved)
+            {
+                var memo = new Memo { Shader = shader, Keywords = saved.Keywords.ToArray(), Queue = saved.CustomQueue };
+                foreach (string name in Overwritten)
+                    if (saved.Floats.ContainsKey(name))
+                        memo.Floats[name] = saved.Floats[name];
+                return memo;
+            }
+
+            public static Memo Parse(string text)
+            {
+                if (string.IsNullOrEmpty(text) || !text.StartsWith(Prefix, StringComparison.Ordinal))
+                    return null;
+                var memo = new Memo();
+                foreach (string part in text.Substring(Prefix.Length).Split('|'))
+                {
+                    int eq = part.IndexOf('=');
+                    if (eq < 0) continue;
+                    string key = part.Substring(0, eq), value = Uri.UnescapeDataString(part.Substring(eq + 1));
+                    if (key == "shader") memo.Shader = value;
+                    else if (key == "keywords") memo.Keywords = value.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                    else if (key == "queue") int.TryParse(value, out memo.Queue);
+                    else if (key.StartsWith("f:", StringComparison.Ordinal))
+                    {
+                        float f;
+                        if (float.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f))
+                            memo.Floats[key.Substring(2)] = f;
+                    }
+                }
+                return memo;
+            }
+
+            public void ApplyTo(Saved saved)
+            {
+                saved.Keywords.Clear();
+                foreach (string keyword in Keywords) saved.Keywords.Add(keyword);
+                saved.CustomQueue = Queue;
+                foreach (string name in Overwritten)
+                {
+                    saved.Floats.Remove(name);
+                    if (Floats.ContainsKey(name)) saved.Floats[name] = Floats[name];
+                }
+            }
+
+            public override string ToString()
+            {
+                var parts = new List<string>
+                {
+                    "shader=" + Uri.EscapeDataString(Shader),
+                    "keywords=" + Uri.EscapeDataString(string.Join(" ", Keywords)),
+                    "queue=" + Queue,
+                };
+                foreach (var pair in Floats)
+                    parts.Add("f:" + pair.Key + "=" + pair.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                return Prefix + string.Join("|", parts.ToArray());
+            }
         }
 
         private sealed class Saved
@@ -91,11 +147,11 @@ namespace GameSpelunker
             EditorUtility.DisplayDialog("Game Spelunker", report.Summary, "OK");
         }
 
-        /// <summary>Command line: <c>Unity -batchmode -projectPath &lt;project&gt; -executeMethod GameSpelunker.MaterialRepair.RunBatch</c>.</summary>
         public static void RunBatch()
         {
             var report = Run("Assets", null);
-            Debug.Log("[Game Spelunker] " + report.Summary + " Placeholders renamed: " + report.ShadersRenamed + ".");
+            Debug.Log("[Game Spelunker] " + report.Summary + " Placeholders renamed: " + report.ShadersRenamed +
+                      ". Graphics settings shaders reset to built-in: " + report.GraphicsShadersReset + ".");
             EditorApplication.Exit(0);
         }
 
@@ -110,17 +166,12 @@ namespace GameSpelunker
             return null;
         }
 
-        /// <summary>
-        /// Repairs the materials under <paramref name="folder"/> ("Assets" or a subfolder). <paramref name="shaderNamesByGuid"/>
-        /// names shaders that are not in the project (an import that left them out); null when they are.
-        /// </summary>
         public static MaterialRepairReport Run(string folder, IDictionary<string, string> shaderNamesByGuid)
         {
             var report = new MaterialRepairReport();
             var pipeline = DetectPipeline();
             var real = RealShaders();
 
-            // Placeholder shaders AssetRipper wrote, by guid.
             var placeholders = new Dictionary<string, string>();
             foreach (string guid in AssetDatabase.FindAssets("t:Shader", new[] { folder }))
             {
@@ -151,11 +202,16 @@ namespace GameSpelunker
                     if (material == null)
                         continue;
 
-                    string shaderGuid = ShaderGuid(path);
+                    var importer = AssetImporter.GetAtPath(path);
+                    var memo = Memo.Parse(importer != null ? importer.userData : null);
                     string original;
-                    if (shaderGuid != null && placeholders.TryGetValue(shaderGuid, out original))
+                    string shaderGuid = ShaderGuid(path);
+                    if (memo != null)
                     {
-                        // uses a placeholder
+                        original = memo.Shader;
+                    }
+                    else if (shaderGuid != null && placeholders.TryGetValue(shaderGuid, out original))
+                    {
                     }
                     else if (material.shader == null || material.shader.name == "Hidden/InternalErrorShader")
                     {
@@ -167,7 +223,18 @@ namespace GameSpelunker
                         continue;
                     }
 
-                    Repair(material, original, pipeline, real, report);
+                    var saved = Read(material);
+                    if (memo != null)
+                    {
+                        memo.ApplyTo(saved);
+                    }
+                    else if (importer != null)
+                    {
+                        importer.userData = Memo.From(original, saved).ToString();
+                        AssetDatabase.WriteImportSettingsIfDirty(path);
+                    }
+
+                    Repair(material, original, saved, pipeline, real, report);
                     EditorUtility.SetDirty(material);
                 }
             }
@@ -176,8 +243,6 @@ namespace GameSpelunker
                 EditorUtility.ClearProgressBar();
             }
 
-            // A placeholder named like a real shader hides it from Shader.Find: the terrain draws its grass with
-            // Hidden/TerrainEngine/Details/*, and game code looks shaders up by name. Rename those placeholders.
             foreach (var pair in placeholders)
             {
                 if (!real.ContainsKey(pair.Value))
@@ -191,13 +256,30 @@ namespace GameSpelunker
                 report.ShadersRenamed++;
             }
 
+            report.GraphicsShadersReset = ResetGraphicsShaders(placeholders);
             AssetDatabase.SaveAssets();
             return report;
         }
 
-        private static void Repair(Material material, string original, Pipeline pipeline, Dictionary<string, Shader> real, MaterialRepairReport report)
+        private static int ResetGraphicsShaders(Dictionary<string, string> placeholders)
         {
-            // The game used a stock Unity shader (Standard, a URP/HDRP shader, a TextMeshPro one…): its properties match.
+            int reset = 0;
+            foreach (BuiltinShaderType type in Enum.GetValues(typeof(BuiltinShaderType)))
+            {
+                if (GraphicsSettings.GetShaderMode(type) != BuiltinShaderMode.UseCustom)
+                    continue;
+                var custom = GraphicsSettings.GetCustomShader(type);
+                string guid = custom != null ? AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(custom)) : "";
+                if (custom != null && !placeholders.ContainsKey(guid))
+                    continue;
+                GraphicsSettings.SetShaderMode(type, BuiltinShaderMode.UseBuiltin);
+                reset++;
+            }
+            return reset;
+        }
+
+        private static void Repair(Material material, string original, Saved saved, Pipeline pipeline, Dictionary<string, Shader> real, MaterialRepairReport report)
+        {
             Shader same;
             if (original.Length > 0 && real.TryGetValue(original, out same))
             {
@@ -209,7 +291,6 @@ namespace GameSpelunker
             string name = (original + " " + material.name).ToLowerInvariant();
             string shader = original.ToLowerInvariant();
 
-            // A custom sky (often animated by a script): Unity's procedural sky beats a white void.
             if (shader.Contains("skybox") && pipeline != Pipeline.HighDefinition)
             {
                 var sky = Find(real, new[] { "Skybox/Procedural" });
@@ -224,8 +305,6 @@ namespace GameSpelunker
                 report.Skipped++;
                 return;
             }
-
-            var saved = Read(material);
 
             if (shader.Contains("terrain") && !Regex.IsMatch(shader, "detail|grass|tree|billboard|waving"))
             {
@@ -251,11 +330,9 @@ namespace GameSpelunker
             var target = LitShader(pipeline, specular, real);
             if (target == null) { report.Skipped++; return; }
 
-            var albedo = PickAlbedo(saved);
-            bool alpha = albedo != null && HasAlpha(albedo.Texture);
-            // Water surfaces: their look came from the shader, so give them a tinted, glossy, see-through surface.
             bool water = Regex.IsMatch(shader, WaterPattern);
-            // Names only hint at cutout (foliage, fences…): it also needs an alpha channel, or bark would get holes.
+            var albedo = water ? null : PickAlbedo(saved);
+            bool alpha = albedo != null && HasAlpha(albedo.Texture);
             bool cutout = !water && (saved.Keywords.Contains("_ALPHATEST_ON") || (saved.CustomQueue >= 2450 && saved.CustomQueue < 3000)
                                      || (alpha && Regex.IsMatch(name, FoliagePattern)));
             bool transparent = water || (!cutout && (saved.Keywords.Contains("_ALPHABLEND_ON") || saved.Keywords.Contains("_ALPHAPREMULTIPLY_ON")
@@ -263,7 +340,7 @@ namespace GameSpelunker
             float cutoff = saved.Floats.ContainsKey("_Cutoff") ? saved.Floats["_Cutoff"] : 0.5f;
 
             var normal = Pick(saved, new[] { "_BumpMap", "_NormalMap", "_Normal", "_NormalTex" }, "bump|normal|nrm", "detail|2");
-            if (normal != null && !IsNormalMap(normal.Texture)) normal = null; // a packed or mislabelled texture renders worse than none
+            if (normal != null && !IsNormalMap(normal.Texture)) normal = null;
             var occlusion = Pick(saved, new[] { "_OcclusionMap" }, "occlusion|_ao$", "detail");
             var emission = Pick(saved, new[] { "_EmissionMap" }, "emiss|illum|glow", "");
             var specGloss = Pick(saved, new[] { "_SpecGlossMap" }, "", "");
@@ -271,10 +348,7 @@ namespace GameSpelunker
             Color color = saved.Colors.ContainsKey("_Color") ? saved.Colors["_Color"] : saved.Colors.ContainsKey("_BaseColor") ? saved.Colors["_BaseColor"] : Color.white;
             Color emissionColor = saved.Colors.ContainsKey("_EmissionColor") ? saved.Colors["_EmissionColor"] : Color.white;
             if (water)
-            {
-                if (albedo == null) color = new Color(0.16f, 0.27f, 0.30f);
-                color.a = 0.75f;
-            }
+                color = new Color(0.16f, 0.27f, 0.30f, 0.75f);
 
             material.shader = target;
             material.shaderKeywords = new string[0];
@@ -296,7 +370,7 @@ namespace GameSpelunker
                     material.SetFloat("_Cutoff", cutoff);
                     material.EnableKeyword("_ALPHATEST_ON");
                     material.SetOverrideTag("RenderType", "TransparentCutout");
-                    material.SetFloat("_Cull", 0f); // foliage cards are seen from both sides
+                    material.SetFloat("_Cull", 0f);
                     material.renderQueue = (int)RenderQueue.AlphaTest;
                 }
                 else if (transparent)
@@ -410,7 +484,6 @@ namespace GameSpelunker
             return false;
         }
 
-        /// <summary>Shaders only meaningful when game code drives them: post effects, skyboxes, UI, text, hidden helpers.</summary>
         private static bool IsCodeDriven(string shader) =>
             Regex.IsMatch(shader, "^hidden/|postfx|post effect|posteffect|imageeffect|image effect|^ui/|^gui/|sprite|font|textmeshpro|blit|underwater|mask|depth");
 
@@ -437,7 +510,6 @@ namespace GameSpelunker
             return Pipeline.BuiltIn;
         }
 
-        /// <summary>Unity's own shaders and the ones from packages, by name: never a shader of the extracted game.</summary>
         private static Dictionary<string, Shader> RealShaders()
         {
             var result = new Dictionary<string, Shader>();
@@ -517,7 +589,6 @@ namespace GameSpelunker
 
             foreach (string keyword in material.shaderKeywords)
                 saved.Keywords.Add(keyword);
-            // Keywords the placeholder does not declare are kept apart (m_InvalidKeywords) or in the legacy string.
             foreach (string field in new[] { "m_InvalidKeywords", "m_ValidKeywords" })
             {
                 var list = so.FindProperty(field);
@@ -534,7 +605,6 @@ namespace GameSpelunker
             return saved;
         }
 
-        /// <summary>The property name of a saved-properties entry (a string, or a FastPropertyName in old formats).</summary>
         private static string EntryName(SerializedProperty entry)
         {
             var first = entry.FindPropertyRelative("first");
@@ -549,7 +619,6 @@ namespace GameSpelunker
             var exact = Pick(saved, new[] { "_MainTex", "_BaseMap", "_BaseColorMap", "_Albedo", "_AlbedoMap", "_Diffuse", "_DiffuseMap", "_MainTexture", "_Tex" },
                 "albedo|diffuse|main|base|color|^_tex", NotColor);
             if (exact != null) return exact;
-            // Otherwise the first texture that is not obviously something else.
             return saved.Textures.Where(t => t.Value.Texture != null && !Regex.IsMatch(t.Key.ToLowerInvariant(), NotColor))
                 .Select(t => t.Value).FirstOrDefault();
         }
