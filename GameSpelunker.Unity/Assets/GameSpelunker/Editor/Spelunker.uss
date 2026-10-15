@@ -1,55 +1,223 @@
-/* Game Spelunker window. Uses the editor theme, so it follows the light and dark skins. */
+/* Game Spelunker window. Cave palette from the logo: deep purples with an amber lamp accent.
+   Neutral colors come from the editor theme so the light skin stays readable. */
 
-.gs-page > .unity-scroll-view__content-viewport > .unity-scroll-view__content-container {
-    padding: 10px 12px 20px 12px;
+:root {
+    --gs-amber: rgb(255, 179, 71);
+    --gs-amber-dark: rgb(214, 128, 30);
+    --gs-purple: rgb(139, 108, 214);
+    --gs-purple-soft: rgba(139, 108, 214, 0.18);
+    --gs-green: rgb(92, 196, 120);
+    --gs-red: rgb(225, 90, 80);
 }
 
-.gs-title {
-    font-size: 18px;
-    -unity-font-style: bold;
-}
+/* ------------------------------------------------------------- header */
 
-.gs-subtitle {
-    opacity: 0.7;
-    margin-bottom: 8px;
-    white-space: normal;
-}
-
-.gs-section {
-    margin-top: 16px;
-    margin-bottom: 4px;
-    padding-bottom: 3px;
-    font-size: 13px;
-    -unity-font-style: bold;
-    color: rgb(70, 160, 255);
+.gs-header {
+    flex-shrink: 0;
+    min-height: 68px;
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 12px;
     border-bottom-width: 1px;
     border-bottom-color: var(--unity-colors-default-border);
 }
 
-.gs-subsection {
-    margin-top: 10px;
+.gs-dark .gs-header {
+    background-color: rgb(28, 22, 40);
+}
+
+.gs-light .gs-header {
+    background-color: rgb(236, 230, 248);
+}
+
+.gs-logo {
+    flex-shrink: 0;
+    width: 46px;
+    height: 46px;
+    margin-right: 10px;
+}
+
+.gs-header-titles {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.gs-title {
+    flex-shrink: 0;
+    font-size: 18px;
+    -unity-font-style: bold;
+}
+
+.gs-dark .gs-title {
+    color: rgb(255, 225, 170);
+}
+
+.gs-subtitle {
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+.gs-header-links {
+    flex-direction: row;
+}
+
+.gs-icon-button {
+    width: 26px;
+    height: 24px;
+    padding: 4px;
+    margin: 0 0 0 4px;
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+}
+
+.gs-icon-button:hover {
+    background-color: var(--gs-purple-soft);
+}
+
+/* ------------------------------------------------------------- page and cards */
+
+.gs-page > .unity-scroll-view__content-viewport > .unity-scroll-view__content-container {
+    padding: 10px 12px 24px 12px;
+}
+
+.gs-card {
+    margin-bottom: 10px;
+    padding: 10px 12px 12px 12px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: var(--unity-colors-default-border);
+    background-color: rgba(127, 127, 127, 0.06);
+}
+
+.gs-card--notice {
+    border-left-width: 3px;
+    border-left-color: var(--gs-amber);
+}
+
+.gs-card-head {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.gs-card-icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 6px;
+}
+
+.gs-card-title {
+    flex-grow: 1;
+    font-size: 13px;
+    -unity-font-style: bold;
+}
+
+.gs-card-help {
+    margin: 6px 0 2px 0;
+}
+
+.gs-text {
+    white-space: normal;
+    margin-bottom: 6px;
+    opacity: 0.85;
+}
+
+.gs-consent {
+    margin-top: 2px;
+}
+
+.gs-consent > Label {
     -unity-font-style: bold;
 }
 
 .gs-hint {
-    opacity: 0.65;
+    opacity: 0.6;
     font-size: 11px;
     white-space: normal;
-    margin: 2px 0 6px 0;
+    margin: 4px 0;
 }
+
+.gs-muted {
+    opacity: 0.55;
+    font-size: 11px;
+}
+
+.gs-mono {
+    font-size: 10px;
+    opacity: 0.75;
+    white-space: normal;
+}
+
+.gs-subsection {
+    margin: 12px 0 6px 0;
+    -unity-font-style: bold;
+    opacity: 0.85;
+}
+
+/* ------------------------------------------------------------- chips */
+
+.gs-chip {
+    font-size: 10px;
+    -unity-font-style: bold;
+    padding: 1px 7px;
+    margin: 1px 4px 1px 0;
+    border-radius: 9px;
+    border-width: 1px;
+}
+
+.gs-chip--ok {
+    color: var(--gs-green);
+    border-color: rgba(92, 196, 120, 0.6);
+    background-color: rgba(92, 196, 120, 0.12);
+}
+
+.gs-chip--warn {
+    color: var(--gs-amber-dark);
+    border-color: rgba(255, 179, 71, 0.7);
+    background-color: rgba(255, 179, 71, 0.14);
+}
+
+.gs-dark .gs-chip--warn {
+    color: var(--gs-amber);
+}
+
+.gs-chip--info {
+    color: var(--gs-purple);
+    border-color: rgba(139, 108, 214, 0.6);
+    background-color: var(--gs-purple-soft);
+}
+
+.gs-dark .gs-chip--info {
+    color: rgb(199, 178, 255);
+}
+
+.gs-chip--muted {
+    opacity: 0.7;
+    border-color: var(--unity-colors-default-border);
+}
+
+.gs-chips {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* ------------------------------------------------------------- rows and buttons */
 
 .gs-row {
     flex-direction: row;
-    align-items: flex-start;
-    min-height: 20px;
-    margin: 2px 0;
+    align-items: center;
+    min-height: 22px;
+    margin: 3px 0;
 }
 
 .gs-label {
-    width: 130px;
-    min-width: 130px;
-    opacity: 0.75;
-    padding-top: 1px;
+    width: 120px;
+    min-width: 120px;
+    opacity: 0.7;
 }
 
 .gs-field {
@@ -58,62 +226,303 @@
     margin: 0;
 }
 
-.gs-wrap {
-    white-space: normal;
-}
-
 .gs-buttons {
     flex-direction: row;
     flex-wrap: wrap;
-    margin: 4px 0;
+    margin-top: 6px;
 }
 
 .gs-button {
-    margin: 2px 4px 2px 0;
-    padding: 3px 10px;
+    flex-direction: row;
+    align-items: center;
+    margin: 2px 6px 2px 0;
+    padding: 4px 10px;
+    border-radius: 5px;
+}
+
+.gs-button-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 5px;
 }
 
 .gs-button--primary {
-    background-color: rgb(40, 110, 200);
+    background-color: rgb(118, 82, 196);
+    border-color: rgb(139, 108, 214);
+    color: rgb(255, 255, 255);
+}
+
+.gs-button--primary:hover {
+    background-color: rgb(138, 100, 220);
+}
+
+.gs-button--primary > .gs-button-label {
     color: rgb(255, 255, 255);
     -unity-font-style: bold;
 }
 
-.gs-button--primary:hover {
-    background-color: rgb(55, 128, 225);
+.gs-button--big {
+    padding: 7px 18px;
+    background-color: var(--gs-amber-dark);
+    border-color: var(--gs-amber);
 }
 
-.gs-button--primary:disabled {
-    opacity: 0.45;
+.gs-button--big:hover {
+    background-color: rgb(235, 150, 45);
+}
+
+.gs-button--big > .gs-button-label {
+    font-size: 13px;
 }
 
 .gs-button--danger {
     background-color: rgb(150, 50, 50);
+}
+
+.gs-button--danger > .gs-button-label {
     color: rgb(255, 255, 255);
 }
 
-.gs-list-item {
-    background-color: rgba(127, 127, 127, 0.08);
-    border-width: 0;
-    border-radius: 3px;
+.gs-button:disabled {
+    opacity: 0.4;
+}
+
+.gs-progress {
+    margin-top: 8px;
+}
+
+.gs-progress .unity-progress-bar__progress {
+    background-color: var(--gs-amber-dark);
+}
+
+/* ------------------------------------------------------------- game list */
+
+.gs-game-list {
+    margin-top: 6px;
+}
+
+.gs-game {
+    flex-direction: row;
+    align-items: center;
     margin: 1px 0;
-    padding: 4px 8px;
+    padding: 5px 8px;
+    border-radius: 5px;
+    border-width: 0;
+    background-color: rgba(127, 127, 127, 0.07);
+}
+
+.gs-game:hover {
+    background-color: var(--gs-purple-soft);
+}
+
+.gs-game--selected {
+    background-color: rgba(139, 108, 214, 0.32);
+    border-left-width: 3px;
+    border-left-color: var(--gs-amber);
+}
+
+.gs-game-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+}
+
+.gs-game-name {
+    flex-grow: 1;
     -unity-text-align: middle-left;
 }
 
-.gs-list-item:hover {
-    background-color: rgba(127, 127, 127, 0.2);
+/* ------------------------------------------------------------- report tiles */
+
+.gs-report-title {
+    margin-bottom: 6px;
+    opacity: 0.8;
 }
 
-.gs-list-item--selected {
-    background-color: rgba(70, 160, 255, 0.3);
+.gs-tiles {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin: 0 -3px 6px -3px;
+}
+
+.gs-tile {
+    flex-grow: 1;
+    flex-basis: 30%;
+    min-width: 120px;
+    margin: 3px;
+    padding: 7px 9px;
+    border-radius: 6px;
+    background-color: var(--gs-purple-soft);
+}
+
+.gs-tile-top {
+    flex-direction: row;
+    align-items: center;
+}
+
+.gs-tile-icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 5px;
+}
+
+.gs-tile-label {
+    font-size: 10px;
+    opacity: 0.7;
+}
+
+.gs-tile-value {
+    font-size: 15px;
+    -unity-font-style: bold;
+    margin-top: 2px;
+}
+
+.gs-tile-detail {
+    font-size: 10px;
+    opacity: 0.6;
+}
+
+/* ------------------------------------------------------------- export modes */
+
+.gs-modes {
+    flex-direction: row;
+    margin-bottom: 8px;
+}
+
+.gs-mode {
+    flex-grow: 1;
+    flex-basis: 0;
+    flex-direction: row;
+    align-items: flex-start;
+    margin: 0 6px 0 0;
+    padding: 8px;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: var(--unity-colors-default-border);
+    background-color: rgba(127, 127, 127, 0.05);
+    white-space: normal;
+}
+
+.gs-mode:hover {
+    background-color: var(--gs-purple-soft);
+}
+
+.gs-mode--selected {
+    border-color: var(--gs-amber);
+    background-color: rgba(255, 179, 71, 0.1);
+}
+
+.gs-mode-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+}
+
+.gs-mode-text {
+    flex-shrink: 1;
+}
+
+.gs-mode-title {
+    -unity-font-style: bold;
+    -unity-text-align: upper-left;
+}
+
+.gs-mode-description {
+    font-size: 10px;
+    opacity: 0.65;
+    white-space: normal;
+    -unity-text-align: upper-left;
+}
+
+/* ------------------------------------------------------------- log */
+
+.gs-log-foldout {
+    margin-top: 6px;
 }
 
 .gs-log {
-    margin-top: 6px;
-    padding: 6px;
-    border-radius: 3px;
-    background-color: rgba(0, 0, 0, 0.25);
+    padding: 6px 8px;
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0.3);
     font-size: 10px;
     white-space: normal;
+}
+
+.gs-light .gs-log {
+    background-color: rgba(0, 0, 0, 0.07);
+}
+
+/* ------------------------------------------------------------- explore */
+
+.gs-type-grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.gs-type {
+    flex-direction: row;
+    align-items: center;
+    margin: 0 5px 5px 0;
+    padding: 4px 8px;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: var(--unity-colors-default-border);
+    background-color: rgba(127, 127, 127, 0.07);
+}
+
+.gs-type:hover {
+    border-color: var(--gs-purple);
+    background-color: var(--gs-purple-soft);
+}
+
+.gs-type-icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 5px;
+}
+
+.gs-type-count {
+    margin-left: 6px;
+    padding: 0 5px;
+    border-radius: 7px;
+    font-size: 10px;
+    -unity-font-style: bold;
+    background-color: rgba(255, 179, 71, 0.25);
+}
+
+.gs-search {
+    width: auto;
+    margin: 0 0 6px 0;
+}
+
+.gs-script {
+    flex-direction: row;
+    align-items: center;
+    margin: 0;
+    padding: 3px 6px;
+    border-radius: 4px;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.gs-script:hover {
+    background-color: var(--gs-purple-soft);
+}
+
+.gs-script-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 6px;
+}
+
+.gs-script-name {
+    -unity-font-style: bold;
+    margin-right: 8px;
+}
+
+.gs-script-path {
+    font-size: 10px;
+    opacity: 0.5;
+    flex-shrink: 1;
+    overflow: hidden;
 }

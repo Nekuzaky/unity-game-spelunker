@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest an idea for Game Spelunker.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: Describe what you are trying to learn or mod, and what is missing today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How could Game Spelunker help? Mock-ups welcome.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: This is about learning or about modding games that allow it (not bypassing DRM or anti-cheat).
+          required: true
