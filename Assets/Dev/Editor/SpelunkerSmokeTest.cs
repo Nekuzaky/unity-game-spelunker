@@ -34,7 +34,9 @@ namespace GameSpelunker
                           $"{report.SceneCount} scene(s), {BuildInspector.FormatSize(report.TotalSize)}, assemblies: {string.Join(", ", report.GameAssemblies)}, " +
                           $"plugins: {string.Join(", ", report.NativePlugins)}, mod loaders: {string.Join(", ", report.ModLoaders)}");
 
-                Debug.Log($"[Game Spelunker] Unity games found on this PC: {GameFinder.FindInstalledUnityGames().Count}");
+                var found = GameFinder.FindInstalledUnityGames();
+                Debug.Log($"[Game Spelunker] Unity games found on this PC: {found.Count}, " +
+                          $"with an icon: {found.Count(g => GameFinder.FindIcon(g.Folder) != null)}");
 
                 if (Directory.Exists(output))
                     Directory.Delete(output, true);

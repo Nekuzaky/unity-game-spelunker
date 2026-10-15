@@ -15,6 +15,8 @@ In **1 · Game**, **Find Unity games on this PC** looks in the usual install fol
 
 Click a game in the list to select it. Nothing is read beyond the folders above, and the list never leaves your computer.
 
+Games installed by Steam show their icon, in the list and next to the game's name in the build report. Game Spelunker finds the game's app id in the library's `appmanifest_*.acf` files, then reads the icon Steam already keeps in `appcache/librarycache` — nothing is downloaded. Other games show a generic icon.
+
 ## Choose folder…
 
 For any other game — a build of your own, a game installed elsewhere, a downloaded demo — click **Choose folder…** and select either:

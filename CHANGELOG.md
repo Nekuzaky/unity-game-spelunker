@@ -3,7 +3,11 @@
 All notable changes to Game Spelunker are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
-## [0.2.1] - 2026-10-15
+## [Unreleased]
+
+### Added
+- Game icons in the list of found games and next to the game's name in the build report, for games installed by
+  Steam. They come from Steam's local library cache (`appcache/librarycache`): nothing is downloaded.
 
 ### Fixed
 - **Extract** failed with "GetString can only be called from the main thread": AssetRipper's location was read from

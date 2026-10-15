@@ -31,6 +31,8 @@ namespace GameSpelunker
 
         private readonly ConcurrentQueue<Action> _mainThread = new ConcurrentQueue<Action>();
         private readonly List<string> _log = new List<string>();
+        /// <summary>Game icons by game folder (null: none found), loaded once: the UI is rebuilt often.</summary>
+        private readonly Dictionary<string, Texture2D?> _gameIcons = new Dictionary<string, Texture2D?>(StringComparer.OrdinalIgnoreCase);
 
         private string _gamePath = "";
         private BuildReport? _report;
@@ -70,6 +72,31 @@ namespace GameSpelunker
         {
             EditorApplication.update -= Pump;
             _cts?.Cancel();
+            foreach (var icon in _gameIcons.Values)
+                if (icon != null) DestroyImmediate(icon);
+            _gameIcons.Clear();
+        }
+
+        /// <summary>The game's icon from the launcher's local cache, or null.</summary>
+        private Texture2D? GameIcon(string folder)
+        {
+            if (_gameIcons.TryGetValue(folder, out var cached))
+                return cached;
+            Texture2D? icon = null;
+            if (GameFinder.FindIcon(folder) is { } path)
+            {
+                try
+                {
+                    var texture = new Texture2D(2, 2) { hideFlags = HideFlags.HideAndDontSave };
+                    if (texture.LoadImage(File.ReadAllBytes(path)))
+                        icon = texture;
+                    else
+                        DestroyImmediate(texture);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { }
+            }
+            _gameIcons[folder] = icon;
+            return icon;
         }
 
         private void CreateGUI() => Rebuild();
@@ -181,7 +208,9 @@ namespace GameSpelunker
                 foreach (var game in _found)
                 {
                     var item = Css(new Button(() => SelectGame(game.Folder)), "gs-game");
-                    item.Add(Css(new Image { image = Icon("d_UnityEditor.GameView") }, "gs-game-icon"));
+                    var icon = GameIcon(game.Folder);
+                    item.Add(Css(new Image { image = icon != null ? icon : Icon("d_UnityEditor.GameView"), scaleMode = ScaleMode.ScaleAndCrop },
+                        icon != null ? "gs-game-icon gs-game-icon--art" : "gs-game-icon"));
                     item.Add(Css(new Label(game.Name), "gs-game-name"));
                     item.Add(Chip(game.Source, "gs-chip--muted"));
                     if (string.Equals(game.Folder, _gamePath, StringComparison.OrdinalIgnoreCase)) item.AddToClassList("gs-game--selected");
@@ -196,8 +225,15 @@ namespace GameSpelunker
         {
             var card = Card("d_UnityEditor.InspectorWindow", "2 · Build report", (r.Backend == ScriptingBackend.IL2CPP ? "IL2CPP" : r.Backend == ScriptingBackend.Mono ? "Mono" : "Unknown",
                 r.Backend == ScriptingBackend.Mono ? "gs-chip--ok" : "gs-chip--warn"));
-            if (r.Company != null)
-                card.Add(Css(new Label($"{r.Name} — {r.Company}"), "gs-report-title"));
+            var icon = GameIcon(_gamePath);
+            if (r.Company != null || icon != null)
+            {
+                var head = Css(new VisualElement(), "gs-report-head");
+                if (icon != null)
+                    head.Add(Css(new Image { image = icon, scaleMode = ScaleMode.ScaleAndCrop }, "gs-report-icon"));
+                head.Add(Css(new Label(r.Company != null ? $"{r.Name} — {r.Company}" : r.Name), "gs-report-title"));
+                card.Add(head);
+            }
 
             string thisEditor = Application.unityVersion;
             string versionDetail = r.UnityVersion == null ? "unknown"

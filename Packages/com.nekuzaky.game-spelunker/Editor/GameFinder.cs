@@ -49,8 +49,65 @@ namespace GameSpelunker
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { return Array.Empty<string>(); }
         }
 
-        /// <summary>steamapps/common of every Steam library, read from libraryfolders.vdf.</summary>
-        private static IEnumerable<string> SteamCommonFolders()
+        private static readonly Regex InstallDirPattern = new Regex("\"installdir\"\\s+\"([^\"]+)\"", RegexOptions.Compiled);
+        private static readonly Regex IconHashPattern = new Regex("^[0-9a-f]{40}$", RegexOptions.Compiled);
+
+        /// <summary>
+        /// Steam's icon for a game Steam installed, or null. Read from Steam's local library cache
+        /// (<c>appcache/librarycache</c>): nothing is downloaded, the game list never leaves the computer.
+        /// Prefers the square icon, then the wide store header.
+        /// </summary>
+        public static string? FindIcon(string gameFolder)
+        {
+            if (SteamAppId(gameFolder) is not { } appId)
+                return null;
+            foreach (var steam in SteamRoots())
+            {
+                string cache = Path.Combine(steam, "appcache", "librarycache");
+                string folder = Path.Combine(cache, appId);
+                // Current layout: one folder per game, the 32×32 icon stored under its content hash.
+                string? icon = SafeFiles(folder, "*.jpg").FirstOrDefault(f => IconHashPattern.IsMatch(Path.GetFileNameWithoutExtension(f)));
+                // Older layout: <appid>_icon.jpg next to the folders.
+                foreach (var candidate in new[] { icon, Path.Combine(cache, appId + "_icon.jpg"), Path.Combine(folder, "header.jpg"), Path.Combine(cache, appId + "_header.jpg") })
+                    if (candidate != null && File.Exists(candidate))
+                        return candidate;
+            }
+            return null;
+        }
+
+        /// <summary>The Steam app id of a game in <c>steamapps/common/&lt;installdir&gt;</c>, from the library's app manifests.</summary>
+        private static string? SteamAppId(string gameFolder)
+        {
+            string folder = gameFolder.TrimEnd('\\', '/');
+            var common = Directory.GetParent(folder);
+            var steamapps = common?.Parent;
+            if (common == null || steamapps == null
+                || !common.Name.Equals("common", StringComparison.OrdinalIgnoreCase)
+                || !steamapps.Name.Equals("steamapps", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            string installDir = Path.GetFileName(folder);
+            foreach (var manifest in SafeFiles(steamapps.FullName, "appmanifest_*.acf"))
+            {
+                string text;
+                try { text = File.ReadAllText(manifest); }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { continue; }
+                var match = InstallDirPattern.Match(text);
+                if (match.Success && string.Equals(match.Groups[1].Value, installDir, StringComparison.OrdinalIgnoreCase))
+                    return Path.GetFileNameWithoutExtension(manifest).Substring("appmanifest_".Length);
+            }
+            return null;
+        }
+
+        private static IEnumerable<string> SafeFiles(string folder, string pattern)
+        {
+            if (!Directory.Exists(folder)) return Array.Empty<string>();
+            try { return Directory.GetFiles(folder, pattern); }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { return Array.Empty<string>(); }
+        }
+
+        /// <summary>Steam installs found on this computer.</summary>
+        private static IEnumerable<string> SteamRoots()
         {
             // Unity's .NET profile has no registry API: look where Steam usually lives on every fixed drive.
             var steamRoots = new List<string>();
@@ -62,9 +119,14 @@ namespace GameSpelunker
                 steamRoots.Add(Path.Combine(root, "Steam"));
                 steamRoots.Add(Path.Combine(root, "SteamLibrary"));
             }
+            return steamRoots.Where(Directory.Exists);
+        }
 
+        /// <summary>steamapps/common of every Steam library, read from libraryfolders.vdf.</summary>
+        private static IEnumerable<string> SteamCommonFolders()
+        {
             var libraries = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var steam in steamRoots.Where(Directory.Exists))
+            foreach (var steam in SteamRoots())
             {
                 libraries.Add(steam);
                 string vdf = Path.Combine(steam, "steamapps", "libraryfolders.vdf");

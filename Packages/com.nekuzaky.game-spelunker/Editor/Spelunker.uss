@@ -322,9 +322,29 @@
 }
 
 .gs-game-icon {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
+    padding: 2px;
     margin-right: 8px;
+}
+
+/* A real game icon fills its square instead of the padded editor glyph. */
+.gs-game-icon--art {
+    padding: 0;
+    border-radius: 4px;
+}
+
+.gs-report-head {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.gs-report-icon {
+    width: 32px;
+    height: 32px;
+    margin-right: 10px;
+    border-radius: 5px;
 }
 
 .gs-game-name {
@@ -335,7 +355,6 @@
 /* ------------------------------------------------------------- report tiles */
 
 .gs-report-title {
-    margin-bottom: 6px;
     opacity: 0.8;
 }
 
