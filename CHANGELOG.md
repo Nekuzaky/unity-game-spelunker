@@ -3,6 +3,14 @@
 All notable changes to Game Spelunker are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-10-15
+
+### Changed
+- The repository is now `Nekuzaky/unity-game-spelunker`; package links point to it. The package id does not change.
+- The window's help button and the package documentation link open the full manual at
+  https://nekuzaky.com/docs/unity-game-spelunker.
+- The README install URL has no version, so it installs the latest release.
+
 ## [0.1.0] - 2026-10-15
 
 ### Added

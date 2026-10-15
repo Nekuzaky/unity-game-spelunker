@@ -77,6 +77,22 @@ namespace GameSpelunker
             int width = Mathf.RoundToInt(screenRect.width * scale);
             int height = Mathf.RoundToInt(screenRect.height * scale);
             var pixels = InternalEditorUtility.ReadScreenPixel(new Vector2(screenRect.x * scale, screenRect.y * scale), width, height);
+
+            // The screen is read as-is: if another window covers Unity, the capture would show it. Keep the image
+            // only when the window header (dark purple band at the top) is really there.
+            var header = new Color(28 / 255f, 22 / 255f, 40 / 255f);
+            int matches = 0, samples = 0;
+            for (int y = height - Mathf.RoundToInt(70 * scale); y < height - Mathf.RoundToInt(30 * scale); y += 2)
+                for (int x = Mathf.RoundToInt(120 * scale); x < width - Mathf.RoundToInt(120 * scale); x += 4)
+                {
+                    var c = pixels[y * width + x];
+                    samples++;
+                    if (Mathf.Abs(c.r - header.r) < 0.06f && Mathf.Abs(c.g - header.g) < 0.06f && Mathf.Abs(c.b - header.b) < 0.06f)
+                        matches++;
+                }
+            if (samples == 0 || matches < samples * 0.5f)
+                throw new InvalidOperationException($"The window was not visible on screen ({matches}/{samples} header pixels): capture discarded.");
+
             var tex = new Texture2D(width, height, TextureFormat.RGB24, false);
             tex.SetPixels(pixels);
             tex.Apply();

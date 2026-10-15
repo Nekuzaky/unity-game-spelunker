@@ -27,6 +27,7 @@ namespace GameSpelunker
         private const string IconPath = PackageRoot + "/Editor/Icons/GameSpelunker.png";
         private const string TabIconPath = PackageRoot + "/Editor/Icons/GameSpelunker-tab.png";
         public const string RepositoryUrl = "https://github.com/Nekuzaky/unity-game-spelunker";
+        public const string DocumentationUrl = "https://nekuzaky.com/docs/unity-game-spelunker";
 
         private readonly ConcurrentQueue<Action> _mainThread = new ConcurrentQueue<Action>();
         private readonly List<string> _log = new List<string>();
@@ -129,7 +130,7 @@ namespace GameSpelunker
             titles.Add(Css(new Label("See how Unity games are built · learning & modding"), "gs-subtitle"));
             header.Add(titles);
             var links = Css(new VisualElement(), "gs-header-links");
-            links.Add(IconButton("d__Help", "Documentation", () => Application.OpenURL(RepositoryUrl + "#readme")));
+            links.Add(IconButton("d__Help", "Documentation", () => Application.OpenURL(DocumentationUrl)));
             links.Add(IconButton("d_DebuggerAttached", "Report a bug", () => Application.OpenURL(RepositoryUrl + "/issues/new/choose")));
             links.Add(IconButton("d_Refresh", "Refresh", Rebuild));
             header.Add(links);

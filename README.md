@@ -30,13 +30,17 @@ working on, and helps you explore the decompiled scripts.
 In Unity **6000.3 or newer**: **Window → Package Manager → + → Install package from git URL…** and paste:
 
 ```
-https://github.com/Nekuzaky/unity-game-spelunker.git?path=Packages/com.nekuzaky.game-spelunker#v0.1.0
+https://github.com/Nekuzaky/unity-game-spelunker.git?path=Packages/com.nekuzaky.game-spelunker
 ```
 
 Then open **Tools → Game Spelunker** (`Ctrl+Shift+G`). The first time, accept the usage notice and click
 **Install AssetRipper** (44 MB, downloaded from github.com/AssetRipper).
 
-To always get the latest version, drop `#v0.1.0` from the URL. Tested with Unity 6000.3.13f1 and 6000.5.9f1. The old repository address (`game-spelunker`) redirects here.
+This URL installs the latest version. Unity then keeps that exact version until you update: to get a newer one,
+paste the same URL again in **Install package from git URL…**. To stay on a specific version, add its tag at the
+end, for example `…game-spelunker#v0.1.1`.
+
+Tested with Unity 6000.3.13f1 and 6000.5.9f1. Full documentation: **https://nekuzaky.com/docs/unity-game-spelunker**
 
 ## Features
 
