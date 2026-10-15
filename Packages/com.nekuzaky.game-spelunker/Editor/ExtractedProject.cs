@@ -28,6 +28,7 @@ namespace GameSpelunker
         public int LibrariesSwitchedOff;
         public int UnreadableRemoved;
         public int ObsoleteComponentsRemoved;
+        public int SpawnedObjects;
         public bool ToolsInstalled;
     }
 
@@ -164,6 +165,8 @@ namespace GameSpelunker
                          .Where(f => f.EndsWith(".unity", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)))
                 result.ObsoleteComponentsRemoved += RemoveObsoleteComponents(file);
 
+            result.SpawnedObjects = SpawnScanner.Scan(assets);
+
             if (Directory.Exists(scripts))
             {
                 foreach (var file in Directory.GetFiles(scripts, "*.cs", SearchOption.AllDirectories))
@@ -182,6 +185,7 @@ namespace GameSpelunker
             Directory.CreateDirectory(tools);
             File.Copy(Path.Combine(toolsSource, "MaterialRepair.cs"), Path.Combine(tools, "MaterialRepair.cs"), true);
             File.Copy(Path.Combine(toolsSource, "ExtractedProjectTools~", "ExtractedProjectSetup.cs"), Path.Combine(tools, "ExtractedProjectSetup.cs"), true);
+            File.Copy(Path.Combine(toolsSource, "ExtractedProjectTools~", "SpawnPreview.cs"), Path.Combine(tools, "SpawnPreview.cs"), true);
             File.WriteAllText(Path.Combine(tools, "GameSpelunker.ExtractedTools.asmdef"),
                 "{\n    \"name\": \"GameSpelunker.ExtractedTools\",\n    \"includePlatforms\": [\"Editor\"],\n    \"autoReferenced\": false\n}\n");
             result.ToolsInstalled = true;

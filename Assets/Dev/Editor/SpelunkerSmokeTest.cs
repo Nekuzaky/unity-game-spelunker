@@ -137,7 +137,8 @@ namespace GameSpelunker
                 var prepared = ExtractedProject.PrepareForOpening(export, ExtractedProject.ToolsSource());
                 Debug.Log($"[Game Spelunker] Prepared {export}: {prepared.ScriptsStopped} script(s) stopped in edit mode, " +
                           $"{prepared.GeneratedRemoved} generated removed, {prepared.AssemblyInfoRemoved} AssemblyInfo removed, " +
-                          $"{prepared.LibrariesAdded} libraries added, game code off: {prepared.GameCodeOff}, tools installed: {prepared.ToolsInstalled}");
+                          $"{prepared.LibrariesAdded} libraries added, game code off: {prepared.GameCodeOff}, tools installed: {prepared.ToolsInstalled}, " +
+                          $"objects spawned by code: {prepared.SpawnedObjects}");
                 EditorApplication.Exit(0);
             }
             catch (Exception ex)

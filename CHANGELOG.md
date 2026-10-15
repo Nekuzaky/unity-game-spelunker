@@ -6,6 +6,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ## [Unreleased]
 
 ### Added
+- **Previews of objects spawned by game code.** Scenes are scanned for markers whose `High` / `Mid` / `Low` / `LOD0`…
+  fields point to prefabs (how The Forest places its 8,940 trees), and the extracted project shows those objects at
+  their world position when a scene opens. Never saved into the scene, hidden in Play mode, toggled from
+  **Tools → Game Spelunker → Show Objects Spawned by Game Code**.
+- The repair reads how the original shader described each property: a texture is only reused as specular,
+  metallic, normal, occlusion or emission map when its description says so (a "Detail Mask (G) Noise (B) Occlusion
+  (A)" map is not a specular map), and a `_Color` described as a "Color Variation" is not used as a tint.
+- Rebuilt materials no longer inherit textures that happen to sit in Standard's own slots (detail, parallax…), bark
+  and trunks are never cut out (their alpha is often gloss), and the tint's alpha no longer cuts out opaque surfaces.
 - **Projects delivered ready.** After extracting a Unity project, Game Spelunker opens it in Unity in the background
   (the version Open in Unity uses), imports every asset and repairs the materials, with a progress bar. Option
   **Import into Unity and repair right away**, on by default. Log in `AuxiliaryFiles/GameSpelunker-import.log`.

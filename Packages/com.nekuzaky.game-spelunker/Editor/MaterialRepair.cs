@@ -48,7 +48,39 @@ namespace GameSpelunker
         private static readonly Regex ShaderRefPattern = new Regex("m_Shader:\\s*\\{fileID:\\s*-?\\d+,\\s*guid:\\s*([0-9a-f]{32})");
 
         private const string NotColor = "normal|bump|nrm|spec|gloss|metal|rough|detail|mask|noise|flow|foam|emiss|illum|occlu|height|parallax|splat|control|cube|refl|lightmap|ramp|lut|wind|dissolve|trans";
-        private const string FoliagePattern = "cutout|alphatest|alpha test|foliage|leaf|leaves|grass|fern|bush|plant|billboard|branch|ivy|vine|hair|fence|stipple|tree";
+        private const string SolidPattern = "bark|trunk";
+
+        private static readonly string[] TextureSlots =
+        {
+            "_MainTex", "_BaseMap", "_BaseColorMap", "_BumpMap", "_NormalMap", "_OcclusionMap", "_EmissionMap", "_EmissiveColorMap",
+            "_SpecGlossMap", "_MetallicGlossMap", "_MaskMap", "_DetailAlbedoMap", "_DetailNormalMap", "_DetailMask", "_DetailMap",
+            "_ParallaxMap", "_HeightMap",
+        };
+
+        private static readonly Dictionary<string, string> declarations = new Dictionary<string, string>();
+
+        private static TexEnv Role(string shader, TexEnv env, string role)
+        {
+            string text;
+            if (env == null || !declarations.TryGetValue(shader, out text))
+                return env;
+            var declared = Regex.Match(text, Regex.Escape(env.Name) + "\\s*\\(\\s*\"([^\"]*)\"");
+            if (!declared.Success)
+                return env;
+            string description = declared.Groups[1].Value;
+            if (!Regex.IsMatch(description, role, RegexOptions.IgnoreCase))
+                return null;
+            return Regex.IsMatch(description, "mask|noise", RegexOptions.IgnoreCase) && !Regex.IsMatch(role, "mask") ? null : env;
+        }
+
+        private static bool TintIsNotAColor(string shader)
+        {
+            string text;
+            return declarations.TryGetValue(shader, out text)
+                   && Regex.IsMatch(text, "_Color\\s*\\(\\s*\"[^\"]*(variation|variance|random)", RegexOptions.IgnoreCase);
+        }
+
+        private const string FoliagePattern ="cutout|alphatest|alpha test|foliage|leaf|leaves|grass|fern|bush|plant|billboard|branch|ivy|vine|hair|fence|stipple|tree";
         private const string TransparentPattern = "transparent|glass|alpha blended|fade|window";
         private const string WaterPattern = "(^|/)\\s*(water|ocean|lake|river)";
 
@@ -56,6 +88,7 @@ namespace GameSpelunker
 
         private sealed class TexEnv
         {
+            public string Name = "";
             public Texture Texture;
             public Vector2 Scale = Vector2.one;
             public Vector2 Offset = Vector2.zero;
@@ -173,6 +206,7 @@ namespace GameSpelunker
             var real = RealShaders();
 
             var placeholders = new Dictionary<string, string>();
+            declarations.Clear();
             foreach (string guid in AssetDatabase.FindAssets("t:Shader", new[] { folder }))
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
@@ -180,8 +214,12 @@ namespace GameSpelunker
                 if (text == null || text.IndexOf(DummyMarker, StringComparison.Ordinal) < 0)
                     continue;
                 var name = ShaderNamePattern.Match(text);
-                if (name.Success)
-                    placeholders[guid] = name.Groups[1].Value;
+                if (!name.Success)
+                    continue;
+                placeholders[guid] = name.Groups[1].Value;
+                declarations[name.Groups[1].Value] = text;
+                if (name.Groups[1].Value.StartsWith(RenamedPrefix, StringComparison.Ordinal))
+                    declarations[name.Groups[1].Value.Substring(RenamedPrefix.Length)] = text;
             }
 
             Shader lit = LitShader(pipeline, false, real);
@@ -336,7 +374,9 @@ namespace GameSpelunker
                 return;
             }
 
-            bool specular = saved.Keywords.Contains("_SPECGLOSSMAP") || HasTexture(saved, "_SpecGlossMap") || saved.Colors.ContainsKey("_SpecColor");
+            var specGloss = Role(original, Pick(saved, new[] { "_SpecGlossMap" }, "", ""), "spec");
+            bool specular = specGloss != null || saved.Colors.ContainsKey("_SpecColor")
+                            || (saved.Keywords.Contains("_SPECGLOSSMAP") && !HasTexture(saved, "_SpecGlossMap"));
             var target = LitShader(pipeline, specular, real);
             if (target == null) { report.Skipped++; return; }
 
@@ -344,24 +384,29 @@ namespace GameSpelunker
             var albedo = water ? null : PickAlbedo(saved);
             bool alpha = albedo != null && HasAlpha(albedo.Texture);
             bool cutout = !water && (saved.Keywords.Contains("_ALPHATEST_ON") || (saved.CustomQueue >= 2450 && saved.CustomQueue < 3000)
-                                     || (alpha && Regex.IsMatch(name, FoliagePattern)));
+                                     || (alpha && Regex.IsMatch(name, FoliagePattern) && !Regex.IsMatch(name, SolidPattern)));
             bool transparent = water || (!cutout && (saved.Keywords.Contains("_ALPHABLEND_ON") || saved.Keywords.Contains("_ALPHAPREMULTIPLY_ON")
                                                      || saved.CustomQueue >= 3000 || (alpha && Regex.IsMatch(name, TransparentPattern))));
             float cutoff = saved.Floats.ContainsKey("_Cutoff") ? saved.Floats["_Cutoff"] : 0.5f;
 
-            var normal = Pick(saved, new[] { "_BumpMap", "_NormalMap", "_Normal", "_NormalTex" }, "bump|normal|nrm", "detail|2");
+            var normal = Role(original, Pick(saved, new[] { "_BumpMap", "_NormalMap", "_Normal", "_NormalTex" }, "bump|normal|nrm", "detail|2"), "normal|bump");
             if (normal != null && !IsNormalMap(normal.Texture)) normal = null;
-            var occlusion = Pick(saved, new[] { "_OcclusionMap" }, "occlusion|_ao$", "detail");
-            var emission = Pick(saved, new[] { "_EmissionMap" }, "emiss|illum|glow", "");
-            var specGloss = Pick(saved, new[] { "_SpecGlossMap" }, "", "");
-            var metallic = Pick(saved, new[] { "_MetallicGlossMap" }, "", "");
-            Color color = saved.Colors.ContainsKey("_Color") ? saved.Colors["_Color"] : saved.Colors.ContainsKey("_BaseColor") ? saved.Colors["_BaseColor"] : Color.white;
+            var occlusion = Role(original, Pick(saved, new[] { "_OcclusionMap" }, "occlusion|_ao$", "detail"), "occlusion|\\bao\\b");
+            var emission = Role(original, Pick(saved, new[] { "_EmissionMap" }, "emiss|illum|glow", ""), "emiss|illum|glow");
+            var metallic = Role(original, Pick(saved, new[] { "_MetallicGlossMap" }, "", ""), "metal");
+            Color color = TintIsNotAColor(original) ? Color.white
+                : saved.Colors.ContainsKey("_Color") ? saved.Colors["_Color"] : saved.Colors.ContainsKey("_BaseColor") ? saved.Colors["_BaseColor"] : Color.white;
+            if (!transparent)
+                color.a = 1f;
             Color emissionColor = saved.Colors.ContainsKey("_EmissionColor") ? saved.Colors["_EmissionColor"] : Color.white;
             if (water)
                 color = new Color(0.16f, 0.27f, 0.30f, 0.75f);
 
             material.shader = target;
             material.shaderKeywords = new string[0];
+            foreach (string slot in TextureSlots)
+                if (material.HasProperty(slot))
+                    material.SetTexture(slot, null);
 
             if (pipeline == Pipeline.Universal)
             {
@@ -586,6 +631,7 @@ namespace GameSpelunker
                 var offset = value.FindPropertyRelative("m_Offset");
                 saved.Textures[name] = new TexEnv
                 {
+                    Name = name,
                     Texture = texture != null ? texture.objectReferenceValue as Texture : null,
                     Scale = scale != null ? scale.vector2Value : Vector2.one,
                     Offset = offset != null ? offset.vector2Value : Vector2.zero,
