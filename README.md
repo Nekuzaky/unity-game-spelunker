@@ -38,7 +38,7 @@ AssetRipper (44 MB, from github.com/AssetRipper) is downloaded by itself on your
 
 This URL installs the latest version. Unity then keeps that exact version until you update: to get a newer one,
 paste the same URL again in **Install package from git URL…**. To stay on a specific version, add its tag at the
-end, for example `…game-spelunker#v0.2.0`.
+end, for example `…game-spelunker#v0.3.0`.
 
 Tested with Unity 6000.3.13f1 and 6000.5.9f1. Full documentation: **https://nekuzaky.com/docs/unity-game-spelunker**
 
@@ -49,12 +49,25 @@ Tested with Unity 6000.3.13f1 and 6000.5.9f1. Full documentation: **https://neku
   scenes, size, asset bundles, game assemblies, native plugins, installed mod loaders (BepInEx, MelonLoader, Doorstop…).
 - **Nothing else to install** — the official AssetRipper release is downloaded on the first extraction (never bundled),
   on Windows, macOS and Linux, or you point to a copy you already have.
-- **Extract** — as a Unity project (scenes, prefabs, materials, decompiled scripts) or as raw assets (PNG, models, sounds),
-  with progress, log and cancel.
+- **The game's own Unity** — install the exact Unity version a game was made with through Unity Hub, in one click.
+  With it, the game's original libraries and compiled shaders are kept, so the project looks and behaves like the game.
+- **Extract into a ready project** — as a Unity project (scenes, prefabs, materials, decompiled scripts) or as raw assets
+  (PNG, models, sounds). Each stage shows its time and an estimate of the time left; queue several games; get notified
+  when it ends.
+- **Code that compiles** — decompiled code is rewritten for removed Unity APIs, then compiled in the background
+  (a quick compiler first, Unity confirming) until it compiles; what could not be decompiled is stubbed and listed.
+- **Materials and shaders repaired** — kept game shaders are probed and only those that need the game running fall
+  back to the repair; Unity's built-in shaders come back as real source, interface and text shaders are regenerated,
+  the rest is rebuilt on Standard, URP or HDRP Lit.
+- **Checked in Play mode** — a background Play run with screenshots and an error count, shown as a health dashboard
+  with a copyable report.
 - **Import into your project** — copies the extracted assets into `Assets/Spelunked/<Game>` of the project you have open,
   keeping references between assets.
-- **Explore** — open the export in the matching Unity version, see what's inside by asset type, search the game's scripts
-  and open them in your code editor.
+- **Explore** — open the export in the matching Unity version (on the game's biggest scene), see what's inside by asset
+  type, open any scene, preview textures, see the plugins and middleware the game uses, search the game's scripts and
+  open them in your code editor.
+- **Manage your extractions** — sizes, free the Unity cache, delete, reopen; settings for the output folder, shaders,
+  game code mode, checks and notifications.
 
 ## Importing into your project
 
@@ -80,15 +93,18 @@ The **Import into this project** section (step 4) is built so it can never break
    Click a script to open it in your code editor, or an asset type to show it in Explorer.
 
 Mono builds give fully decompiled scripts. IL2CPP builds give classes, fields and method signatures, but empty method
-bodies. When you open an extracted project and Unity offers *Safe Mode*, choose *Ignore* to explore scenes and assets
-anyway.
+bodies: scenes and assets come back, the game's logic does not run.
 
 ## How it works
 
-Game Spelunker starts AssetRipper headless on a free local port and drives its HTTP API:
-`POST /LoadFolder` with the game's `*_Data` folder, then `POST /Export/UnityProject` or `POST /Export/PrimaryContent`
-with the output folder. AssetRipper's console output is parsed for progress. The build report is read straight from
-the game files (`globalgamemanagers` header, `app.info`, `Managed/`, `il2cpp_data/`, `Plugins/`).
+Game Spelunker starts AssetRipper headless on a free local port and drives its HTTP API: `POST /Settings/Update`
+(compiled shaders kept when the game's Unity is installed, decompiled or original assemblies), `POST /LoadFolder` with
+the game folder, then `POST /Export/UnityProject` or `POST /Export/PrimaryContent`. The build report is read straight
+from the game files (`globalgamemanagers` header, `app.info`, `Managed/`, `il2cpp_data/`, `Plugins/`).
+
+After the export, the project is prepared from disk (API migration, original libraries, native plugins, shader
+restoration, assembly definitions, `steam_appid.txt`), the game's code is compiled in a loop until it builds, and the
+project is opened in the right Unity in batch mode to import every asset, repair materials and run a Play-mode check.
 
 ## Repository layout
 
@@ -96,13 +112,21 @@ The repository root is the Unity project used to develop the package.
 
 ```
 Packages/com.nekuzaky.game-spelunker/   the package users install
-  Editor/SpelunkerWindow.cs             the window (UI Toolkit) and Spelunker.uss
+  Editor/SpelunkerWindow*.cs            the window (UI Toolkit) and Spelunker.uss
   Editor/BuildInspector.cs              build report from game files
   Editor/GameFinder.cs                  installed Unity games (Steam, Epic, GOG, itch.io)
   Editor/AssetRipperInstaller.cs        download / locate AssetRipper
   Editor/AssetRipperSession.cs          run AssetRipper headless and drive its HTTP API
-  Editor/ExtractedProject.cs            scripts, Unity version and editor lookup for an export
+  Editor/UnityEditorInstaller.cs        install the game's Unity version through Unity Hub
+  Editor/ExtractedProject.cs            prepare an export for opening, editor lookup, import and repair
+  Editor/GameCodeCompiler.cs            make the decompiled code compile
+  Editor/MaterialRepair.cs              material repair and render probe (also copied into exports)
+  Editor/ShaderRestorer.cs              built-in and interface shaders restored as source
+  Editor/BuiltinShaders.cs              Unity's official built-in shader source, per version
+  Editor/ProjectChecker.cs              background Play-mode check
+  Editor/SpawnScanner.cs                objects the game spawns from code
   Editor/ProjectImporter.cs             safe import into the open project
+  Editor/ExtractedProjectTools~/        editor tools copied into extracted projects
 Assets/Dev/Editor/                      smoke test and README screenshots (not in the package)
 TestGame/                               a tiny Unity game built for testing
 docs/brand/                             logo and banner (SVG + PNG)
@@ -126,6 +150,7 @@ If Game Spelunker helps you, you can support its development on
 ## Credits
 
 - Extraction by [AssetRipper](https://github.com/AssetRipper/AssetRipper) (GPL-3.0), downloaded separately.
+- Unity's built-in shader source is downloaded from Unity when needed (see `Third Party Notices.md` in the package).
 - Icons in the window are Unity's built-in editor icons.
 - Game Spelunker is not affiliated with Unity Technologies or with the AssetRipper project.
 

@@ -1,8 +1,8 @@
 {
   "name": "com.nekuzaky.game-spelunker",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "displayName": "Game Spelunker",
-  "description": "Editor window to see how Unity games are built and prepare mods for games that allow them: build report, AssetRipper extraction, import into your project, decompiled script explorer.",
+  "description": "Editor window to see how Unity games are built and prepare mods for games that allow them: build report, AssetRipper extraction into a ready-to-open Unity project (code made to compile, materials and shaders repaired, Play-mode check), import into your project, decompiled script explorer.",
   "unity": "6000.3",
   "documentationUrl": "https://nekuzaky.com/docs/unity-game-spelunker",
   "changelogUrl": "https://github.com/Nekuzaky/unity-game-spelunker/blob/main/CHANGELOG.md",

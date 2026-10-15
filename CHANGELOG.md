@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-15
+
 ### Added
 - **Games open in their own Unity version.** When the game's exact editor is installed, the export is prepared for it:
   no API migration, the game's original managed libraries (Rewired, PlayMaker, Bolt…) instead of AssetRipper's
@@ -61,20 +63,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - IL2CPP games load from the game folder (so `GameAssembly.dll` is found) and the build report explains exactly what
   comes back from such a build.
 
-### Fixed
-- Native plugins that are not .NET assemblies (Broforce's ConsoleUtils.dll…) no longer break the plugin copy: the
-  check reads the PE header itself instead of loading the file.
-- The compile loop no longer quarantines Game Spelunker's own tools, stops on errors that are not tied to a script
-  (duplicate assemblies…), and renames decompiled members that share their type's name instead of quarantining the
-  file and everything that uses it.
-- A failed compile loop leaves the game code switched off instead of half on.
-- The game code define is written in the format of the project's Unity version (`1:` before 2021.2, `Standalone:`
-  after); older projects silently dropped it, so their game code was never compiled and every component reported a
-  missing script in Play mode.
-- The game's Unity version is remembered at extraction (`AuxiliaryFiles/GameSpelunker-version.txt`), so preparing a
-  project again after Unity upgraded it still migrates the APIs it needs.
-- The quick compiler only fixes errors decompilation causes; a type it cannot resolve is left to Unity instead of
-  setting the file aside.
 - **The game's code is made to compile.** After the import, Game Spelunker compiles the decompiled code in the
   background (with the game code switched on), and repeats until it compiles: members the decompiler could not rebuild
   are stubbed (same signature, a warning or a NotImplementedException inside), and files that cannot be stubbed are
@@ -126,6 +114,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   Steam. They come from Steam's local library cache (`appcache/librarycache`): nothing is downloaded.
 
 ### Fixed
+- Native plugins that are not .NET assemblies (Broforce's ConsoleUtils.dll…) no longer break the plugin copy: the
+  check reads the PE header itself instead of loading the file.
+- The compile loop no longer quarantines Game Spelunker's own tools, stops on errors that are not tied to a script
+  (duplicate assemblies…), and renames decompiled members that share their type's name instead of quarantining the
+  file and everything that uses it.
+- A failed compile loop leaves the game code switched off instead of half on.
+- The game code define is written in the format of the project's Unity version (`1:` before 2021.2, `Standalone:`
+  after); older projects silently dropped it, so their game code was never compiled and every component reported a
+  missing script in Play mode.
+- The game's Unity version is remembered at extraction (`AuxiliaryFiles/GameSpelunker-version.txt`), so preparing a
+  project again after Unity upgraded it still migrates the APIs it needs.
+- The quick compiler only fixes errors decompilation causes; a type it cannot resolve is left to Unity instead of
+  setting the file aside.
 - The build report showed Unity **?** for games made with Unity 3, 4 or 5 (for example 5.6.5p4): only versions
   starting with a year or 6000 were recognised.
 - **Extract** failed with "GetString can only be called from the main thread": AssetRipper's location was read from
