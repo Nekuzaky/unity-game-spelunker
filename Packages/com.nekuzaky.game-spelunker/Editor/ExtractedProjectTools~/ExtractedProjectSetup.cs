@@ -6,8 +6,15 @@ using UnityEngine;
 namespace GameSpelunker
 {
     [InitializeOnLoad]
-    internal static class ExtractedProjectSetup
+    public static class ExtractedProjectSetup
     {
+        public static void RunBatch()
+        {
+            var report = Repair();
+            Debug.Log("[Game Spelunker] Ready: " + report.Summary);
+            EditorApplication.Exit(0);
+        }
+
         private const string Marker = "ProjectSettings/GameSpelunker.txt";
         private const string GameCodeDefine = "SPELUNKER_GAME_CODE";
 
@@ -27,14 +34,20 @@ namespace GameSpelunker
             if (File.Exists(Marker))
                 return;
 
-            var report = MaterialRepair.Run("Assets", null);
-            File.WriteAllText(Marker,
-                "Game Spelunker repaired this project's materials the first time it was opened.\n" + report.Summary + "\n" +
-                "Run it again from Assets > Game Spelunker > Repair Materials. Delete this file to repair on the next open.\n");
+            var report = Repair();
             Debug.Log("[Game Spelunker] " + report.Summary);
             if (!GameCodeEnabled())
                 Debug.Log("[Game Spelunker] The game's decompiled code is switched off: scenes, prefabs and assets work, but " +
                           "nothing runs in Play mode. Tools > Game Spelunker > Enable Game Code compiles it (it often needs fixes).");
+        }
+
+        private static MaterialRepairReport Repair()
+        {
+            var report = MaterialRepair.Run("Assets", null);
+            File.WriteAllText(Marker,
+                "Game Spelunker repaired this project's materials.\n" + report.Summary + "\n" +
+                "Run it again from Assets > Game Spelunker > Repair Materials. Delete this file to repair on the next open.\n");
+            return report;
         }
 
         [MenuItem("Tools/Game Spelunker/Enable Game Code", false, 100)]

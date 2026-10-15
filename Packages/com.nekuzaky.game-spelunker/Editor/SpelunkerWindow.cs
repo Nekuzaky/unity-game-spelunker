@@ -43,6 +43,7 @@ namespace GameSpelunker
         private string _importTarget = "";
         private bool _importScenes = true;
         private bool _importScripts;
+        private bool _importInUnity = true;
         private string _importMessage = "";
 
         [MenuItem("Tools/Game Spelunker %#g", priority = 1)]
@@ -304,6 +305,15 @@ namespace GameSpelunker
             output.AddToClassList("gs-path");
             output.RegisterValueChangedCallback(e => _output = e.newValue);
             card.Add(Row("Output folder", output));
+            if (_mode == ExportMode.UnityProject)
+            {
+                var importToggle = new Toggle("Import into Unity and repair right away (recommended)") { value = _importInUnity };
+                importToggle.tooltip = "Opens the extracted project in Unity in the background, imports every asset and repairs the materials, " +
+                                       "so it is ready the moment you open it. Large games take several minutes.";
+                importToggle.RegisterValueChangedCallback(e => _importInUnity = e.newValue);
+                importToggle.SetEnabled(!_busy);
+                card.Add(importToggle);
+            }
 
             bool ripperAvailable = AssetRipperInstaller.Executable != null || AssetRipperInstaller.CanAutoInstall;
             if (_busy)
@@ -630,6 +640,8 @@ namespace GameSpelunker
             var mode = _mode;
             string? installed = AssetRipperInstaller.Executable;
             string tools = ExtractedProject.ToolsSource();
+            string thisEditor = EditorApplication.applicationPath;
+            bool importInUnity = _importInUnity;
             bool download = installed == null;
             _busy = true;
             _busyText = download ? DownloadText : "Starting AssetRipper…";
@@ -682,11 +694,27 @@ namespace GameSpelunker
                     string done = $"Extracted in {seconds:0} s to {output}.";
                     if (mode == ExportMode.UnityProject)
                     {
+                        session.Dispose();
+                        RunOnMain(() => { _progress = 0; _busyText = "Preparing the project…"; });
                         var prepared = ExtractedProject.PrepareForOpening(output, tools);
-                        done += " Ready to open: materials repaired on first open" +
-                                (prepared.GameCodeOff ? "; the game's decompiled code is switched off so the project always compiles " +
-                                                        "(Tools → Game Spelunker → Enable Game Code in that project)" : "") +
-                                (prepared.LibrariesAdded > 0 ? $"; {prepared.LibrariesAdded} library(ies) it needs copied from the game" : "") + ".";
+                        string gameCode = prepared.GameCodeOff
+                            ? " The game's decompiled code is switched off so the project always compiles (Tools → Game Spelunker → Enable Game Code in that project)."
+                            : "";
+                        if (importInUnity)
+                        {
+                            string editor = ExtractedProject.EditorFor(output, thisEditor);
+                            var importProgress = new Progress<float>(p => RunOnMain(() =>
+                            {
+                                _progress = p;
+                                _busyText = $"Importing into Unity and repairing… {p:P0} (large games take several minutes)";
+                            }));
+                            string summary = await ExtractedProject.ImportAndRepairAsync(output, editor, importProgress, token).ConfigureAwait(false);
+                            done += " Imported into Unity and repaired, ready to open: " + summary + gameCode;
+                        }
+                        else
+                        {
+                            done += " Materials are repaired the first time the project opens." + gameCode;
+                        }
                     }
                     RunOnMain(() => _message = done);
                 }

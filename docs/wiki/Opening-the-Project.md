@@ -17,7 +17,12 @@ The project to open is the **`ExportedProject`** folder inside the output folder
 
 ## What Game Spelunker prepares for you
 
-Right after a **Unity project** extraction (and again before **Open in Unity**), Game Spelunker makes the project safer and nicer to open:
+Right after a **Unity project** extraction, Game Spelunker prepares the project, then — with **Import into Unity and repair right away** ticked, the default — opens it in Unity in the background (the same Unity version **Open in Unity** will use), imports every asset and repairs the materials. The progress bar follows the import; large games take several minutes. When you click **Open in Unity**, the project is ready: no long first import, no repair running in front of you, and a clean Console. The import log is kept in `AuxiliaryFiles/GameSpelunker-import.log`.
+
+What the preparation does:
+
+- **Removed Unity features are cleaned out**: *GUI Layer*, *GUI Texture* and *GUI Text* components (gone from Unity since 2019) are removed from scenes and prefabs, and shader fragments AssetRipper exports as `.asset` files Unity cannot read (`CGProgram`) are deleted.
+- **The game's libraries follow its code**: the game's own `.dll` files (PlayMaker, Rewired…) only load when the game's code is switched on, so a library built against an old Unity can no longer be unloaded as "broken" on every open.
 
 - **The game's code is switched off.** Decompiled code rarely compiles as-is, and while a project has compile errors Unity runs none of its editor tools and asks about Safe Mode. The decompiled scripts are put in two assemblies, `Spelunked.GameCode` and `Spelunked.GameCode.FirstPass`, that only compile when the define `SPELUNKER_GAME_CODE` is set. The project opens without errors; scenes, prefabs and assets are all there, and components keep their values and their link to their script. To try the game's code, use **Tools → Game Spelunker → Enable Game Code** in that project, then fix the errors that appear; **Disable Game Code** switches it off again.
 - **What the code needs is put back**: libraries the game shipped but AssetRipper left out (for example `Boo.Lang.dll`, `UnityScript.Lang.dll`) are copied from the game into `Assets/Plugins`, and the duplicate `AssemblyInfo.cs` files of each decompiled assembly are removed.

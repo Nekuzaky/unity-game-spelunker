@@ -57,6 +57,9 @@ namespace GameSpelunker
 
                 var prepared = ExtractedProject.PrepareForOpening(output, ExtractedProject.ToolsSource());
                 var again = ExtractedProject.PrepareForOpening(output, ExtractedProject.ToolsSource());
+                string ready = ExtractedProject.ImportAndRepairAsync(output, ExtractedProject.EditorFor(output, EditorApplication.applicationPath), null, CancellationToken.None)
+                    .GetAwaiter().GetResult();
+                Debug.Log($"[Game Spelunker] Import and repair in Unity: {ready}");
                 bool toolsCopied = File.Exists(Path.Combine(project, "Assets", "GameSpelunker", "Editor", "MaterialRepair.cs"))
                                    && File.Exists(Path.Combine(project, "Assets", "GameSpelunker", "Editor", "ExtractedProjectSetup.cs"));
                 toolsCopied &= prepared.GameCodeOff && File.Exists(Path.Combine(project, "Assets", "Scripts", "Spelunked.GameCode.asmdef"));
@@ -109,6 +112,12 @@ namespace GameSpelunker
                     session.ExportAsync(output, ExportMode.UnityProject, CancellationToken.None).Wait();
                 }
                 var prepared = ExtractedProject.PrepareForOpening(output, ExtractedProject.ToolsSource());
+                Debug.Log($"[Game Spelunker] Prepared: {prepared.LibrariesSwitchedOff} libraries behind the define, {prepared.UnreadableRemoved} unreadable assets removed, " +
+                          $"{prepared.ObsoleteComponentsRemoved} obsolete components removed");
+                var importStarted = DateTime.UtcNow;
+                string ready = ExtractedProject.ImportAndRepairAsync(output, ExtractedProject.EditorFor(output, EditorApplication.applicationPath), null, CancellationToken.None)
+                    .GetAwaiter().GetResult();
+                Debug.Log($"[Game Spelunker] Imported and repaired in {(DateTime.UtcNow - importStarted).TotalMinutes:0.0} min: {ready}");
                 Debug.Log($"[Game Spelunker] Extracted {report.Name} (Unity {report.UnityVersion}) in {(DateTime.UtcNow - started).TotalMinutes:0.0} min; " +
                           $"{prepared.ScriptsStopped} script(s) stopped in edit mode, {prepared.GeneratedRemoved} generated removed");
                 EditorApplication.Exit(0);

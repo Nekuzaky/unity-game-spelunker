@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ## [Unreleased]
 
 ### Added
+- **Projects delivered ready.** After extracting a Unity project, Game Spelunker opens it in Unity in the background
+  (the version Open in Unity uses), imports every asset and repairs the materials, with a progress bar. Option
+  **Import into Unity and repair right away**, on by default. Log in `AuxiliaryFiles/GameSpelunker-import.log`.
+- Extracted projects open with a clean Console: removed components (GUI Layer, GUI Texture, GUI Text) are cleaned out
+  of scenes and prefabs, unreadable `CGProgram` assets are deleted, the game's own libraries only load with its code
+  (no more "Unloading broken assembly"), and Standard materials get a render queue that matches their blend mode.
 - **Material repair.** AssetRipper replaces the shaders it cannot recover with placeholders that draw one flat
   texture (grey rocks, white terrain, square grass). Extracted projects now repair their materials the first time they
   open: back on the real Unity shader when the game used a stock one, otherwise rebuilt on Standard, URP Lit or HDRP

@@ -220,6 +220,10 @@ namespace GameSpelunker
                     }
                     else
                     {
+                        int queue = material.renderQueue;
+                        MatchQueueToBlendMode(material);
+                        if (material.renderQueue != queue)
+                            EditorUtility.SetDirty(material);
                         continue;
                     }
 
@@ -264,7 +268,12 @@ namespace GameSpelunker
         private static int ResetGraphicsShaders(Dictionary<string, string> placeholders)
         {
             int reset = 0;
-            foreach (BuiltinShaderType type in Enum.GetValues(typeof(BuiltinShaderType)))
+            var types = new[]
+            {
+                BuiltinShaderType.DeferredShading, BuiltinShaderType.DeferredReflections, BuiltinShaderType.ScreenSpaceShadows,
+                BuiltinShaderType.DepthNormals, BuiltinShaderType.MotionVectors, BuiltinShaderType.LightHalo, BuiltinShaderType.LensFlare,
+            };
+            foreach (var type in types)
             {
                 if (GraphicsSettings.GetShaderMode(type) != BuiltinShaderMode.UseCustom)
                     continue;
@@ -284,6 +293,7 @@ namespace GameSpelunker
             if (original.Length > 0 && real.TryGetValue(original, out same))
             {
                 material.shader = same;
+                MatchQueueToBlendMode(material);
                 report.Restored++;
                 return;
             }
@@ -447,7 +457,20 @@ namespace GameSpelunker
                     material.renderQueue = -1;
                 }
             }
+            MatchQueueToBlendMode(material);
             report.Rebuilt++;
+        }
+
+        private static void MatchQueueToBlendMode(Material material)
+        {
+            if (!material.shader.name.StartsWith("Standard", StringComparison.Ordinal) || !material.HasProperty("_Mode"))
+                return;
+            int mode = Mathf.RoundToInt(material.GetFloat("_Mode"));
+            int queue = material.renderQueue;
+            if (mode == 1 && (queue < 2450 || queue > 2500))
+                material.renderQueue = (int)RenderQueue.AlphaTest;
+            else if (mode >= 2 && (queue < 2501 || queue > 3999))
+                material.renderQueue = (int)RenderQueue.Transparent;
         }
 
         private static bool RepairParticle(Material material, bool additive, Pipeline pipeline, Saved saved, Dictionary<string, Shader> real)

@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using UnityEditor;
 
 namespace GameSpelunker
@@ -23,6 +25,9 @@ namespace GameSpelunker
         public int AssemblyInfoRemoved;
         public int LibrariesAdded;
         public bool GameCodeOff;
+        public int LibrariesSwitchedOff;
+        public int UnreadableRemoved;
+        public int ObsoleteComponentsRemoved;
         public bool ToolsInstalled;
     }
 
@@ -141,7 +146,23 @@ namespace GameSpelunker
                 WriteGameCodeAssembly(Path.Combine(plugins, GameCodeFirstPass + ".asmdef"), GameCodeFirstPass, null);
             if (HasScripts(scripts))
                 WriteGameCodeAssembly(Path.Combine(scripts, GameCode + ".asmdef"), GameCode, firstPass ? GameCodeFirstPass : null);
-            result.GameCodeOff = firstPass || HasScripts(scripts);
+            foreach (var dll in Directory.GetFiles(assets, "*.dll", SearchOption.AllDirectories))
+                if (ConstrainLibrary(dll))
+                    result.LibrariesSwitchedOff++;
+            result.GameCodeOff = firstPass || HasScripts(scripts) || result.LibrariesSwitchedOff > 0;
+
+            foreach (var asset in Directory.GetFiles(assets, "*.asset", SearchOption.AllDirectories))
+            {
+                if (!IsUnreadableShaderProgram(asset))
+                    continue;
+                File.Delete(asset);
+                if (File.Exists(asset + ".meta")) File.Delete(asset + ".meta");
+                result.UnreadableRemoved++;
+            }
+
+            foreach (var file in Directory.EnumerateFiles(assets, "*.*", SearchOption.AllDirectories)
+                         .Where(f => f.EndsWith(".unity", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)))
+                result.ObsoleteComponentsRemoved += RemoveObsoleteComponents(file);
 
             if (Directory.Exists(scripts))
             {
@@ -188,6 +209,80 @@ namespace GameSpelunker
                 "}\n");
         }
 
+        private static bool ConstrainLibrary(string dll)
+        {
+            string meta = dll + ".meta";
+            string constraint = "  defineConstraints:\n  - " + GameCodeDefine;
+            if (!File.Exists(meta))
+            {
+                File.WriteAllText(meta, "fileFormatVersion: 2\nguid: " + Guid.NewGuid().ToString("N") + "\nPluginImporter:\n  serializedVersion: 2\n" +
+                                        constraint + "\n  isPreloaded: 0\n  isOverridable: 0\n  platformData:\n  - first:\n      Any:\n    second:\n" +
+                                        "      enabled: 1\n      settings: {}\n  userData:\n  assetBundleName:\n  assetBundleVariant:\n");
+                return true;
+            }
+            string text = File.ReadAllText(meta).Replace("\r\n", "\n");
+            if (text.Contains("- " + GameCodeDefine))
+                return false;
+            if (Regex.IsMatch(text, @"^  defineConstraints: \[\]$", RegexOptions.Multiline))
+                text = Regex.Replace(text, @"^  defineConstraints: \[\]$", constraint, RegexOptions.Multiline);
+            else if (Regex.IsMatch(text, @"^PluginImporter:$", RegexOptions.Multiline))
+                text = Regex.Replace(text, @"^PluginImporter:$", "PluginImporter:\n" + constraint, RegexOptions.Multiline);
+            else
+            {
+                var guid = Regex.Match(text, @"^guid: (\w+)", RegexOptions.Multiline);
+                if (!guid.Success)
+                    return false;
+                text = "fileFormatVersion: 2\nguid: " + guid.Groups[1].Value + "\nPluginImporter:\n  serializedVersion: 2\n" + constraint +
+                       "\n  platformData:\n  - first:\n      Any:\n    second:\n      enabled: 1\n      settings: {}\n";
+            }
+            File.WriteAllText(meta, text);
+            return true;
+        }
+
+        private static bool IsUnreadableShaderProgram(string asset)
+        {
+            using var reader = new StreamReader(asset);
+            for (int i = 0; i < 4; i++)
+            {
+                string? line = reader.ReadLine();
+                if (line == null) return false;
+                if (line.StartsWith("--- !u!109 ", StringComparison.Ordinal)) return true;
+            }
+            return false;
+        }
+
+        private static readonly Regex ObsoleteComponentHeader = new Regex(@"^--- !u!(92|131|132) &(-?\d+)", RegexOptions.Compiled);
+
+        private static int RemoveObsoleteComponents(string file)
+        {
+            string text = File.ReadAllText(file);
+            if (!Regex.IsMatch(text, @"^--- !u!(92|131|132) ", RegexOptions.Multiline))
+                return 0;
+            string newline = text.Contains("\r\n") ? "\r\n" : "\n";
+            var lines = text.Replace("\r\n", "\n").Split('\n');
+            var removed = new HashSet<string>();
+            foreach (var line in lines)
+            {
+                var match = ObsoleteComponentHeader.Match(line);
+                if (match.Success) removed.Add(match.Groups[2].Value);
+            }
+            var kept = new List<string>(lines.Length);
+            bool skipping = false;
+            foreach (var line in lines)
+            {
+                if (line.StartsWith("--- ", StringComparison.Ordinal))
+                    skipping = ObsoleteComponentHeader.IsMatch(line);
+                if (skipping)
+                    continue;
+                var reference = Regex.Match(line, @"^\s*- (?:component|\d+): \{fileID: (-?\d+)\}\s*$");
+                if (reference.Success && removed.Contains(reference.Groups[1].Value))
+                    continue;
+                kept.Add(line);
+            }
+            File.WriteAllText(file, string.Join(newline, kept));
+            return removed.Count;
+        }
+
         public static int StopEditModeExecution(string folder)
         {
             int changed = 0;
@@ -205,11 +300,86 @@ namespace GameSpelunker
             return changed;
         }
 
+        public static string EditorFor(string exportFolder, string fallback) => FindEditor(UnityVersionOf(exportFolder)) ?? fallback;
+
+        public static async Task<string> ImportAndRepairAsync(string exportFolder, string editor, IProgress<float>? progress, CancellationToken token)
+        {
+            string project = ProjectFolder(exportFolder);
+            string log = Path.Combine(exportFolder, "AuxiliaryFiles", "GameSpelunker-import.log");
+            Directory.CreateDirectory(Path.GetDirectoryName(log)!);
+            if (File.Exists(log))
+                File.Delete(log);
+            int total = Math.Max(1, Directory.EnumerateFiles(Path.Combine(project, "Assets"), "*", SearchOption.AllDirectories)
+                .Count(f => !f.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)));
+
+            var info = new ProcessStartInfo(editor,
+                $"-batchmode -projectPath \"{project}\" -executeMethod GameSpelunker.ExtractedProjectSetup.RunBatch -logFile \"{log}\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            using var process = Process.Start(info) ?? throw new InvalidOperationException("Could not start Unity.");
+            using var registration = token.Register(() =>
+            {
+                try { if (!process.HasExited) process.Kill(); }
+                catch (InvalidOperationException) { }
+            });
+
+            long position = 0;
+            int imported = 0;
+            while (!process.HasExited)
+            {
+                await Task.Delay(1000).ConfigureAwait(false);
+                imported += CountImports(log, ref position);
+                progress?.Report(Math.Min(0.99f, imported / (float)total));
+            }
+            token.ThrowIfCancellationRequested();
+
+            string text = ReadShared(log);
+            var ready = Regex.Match(text, @"\[Game Spelunker\] Ready: (.*)");
+            if (ready.Success)
+                return ready.Groups[1].Value.Trim();
+            if (text.Contains("another Unity instance is running with this project open") || text.Contains("It looks like another Unity instance"))
+                throw new InvalidOperationException("The project is already open in Unity. Close it and click Open in Unity: it repairs on first open.");
+            if (text.Contains("Scripts have compiler errors"))
+                throw new InvalidOperationException("The project has compile errors, so Unity could not run the repair. See " + log);
+            throw new InvalidOperationException($"Unity stopped before the repair (exit code {process.ExitCode}). See {log}");
+        }
+
+        private static int CountImports(string log, ref long position)
+        {
+            if (!File.Exists(log))
+                return 0;
+            using var stream = new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            if (stream.Length <= position)
+                return 0;
+            stream.Seek(position, SeekOrigin.Begin);
+            using var reader = new StreamReader(stream);
+            string chunk = reader.ReadToEnd();
+            position = stream.Length;
+            int count = 0, index = 0;
+            while ((index = chunk.IndexOf("Start importing ", index, StringComparison.Ordinal)) >= 0)
+            {
+                count++;
+                index += 16;
+            }
+            return count;
+        }
+
+        private static string ReadShared(string path)
+        {
+            if (!File.Exists(path))
+                return "";
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
+        }
+
         public static void OpenInUnity(string exportFolder)
         {
             PrepareForOpening(exportFolder, ToolsSource());
             string project = ProjectFolder(exportFolder);
-            string editor = FindEditor(UnityVersionOf(exportFolder)) ?? EditorApplication.applicationPath;
+            string editor = EditorFor(exportFolder, EditorApplication.applicationPath);
             Process.Start(new ProcessStartInfo(editor, $"-projectPath \"{project}\"") { UseShellExecute = false });
         }
     }
