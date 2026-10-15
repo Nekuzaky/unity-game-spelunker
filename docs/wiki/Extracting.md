@@ -1,6 +1,6 @@
 # Extracting
 
-The **4 · Extract** card turns the selected game into files you can explore. It needs the usage notice to be accepted and AssetRipper to be installed.
+The **3 · Extract** card turns the selected game into files you can explore. It needs the usage notice to be accepted. If AssetRipper is not installed yet, the first extraction downloads it — see **[AssetRipper](AssetRipper)**.
 
 ## Choosing what to export
 
@@ -24,7 +24,7 @@ Any other non-empty folder is refused.
 
 Click **Extract**. The card shows:
 
-- a progress bar for the **loading** step (AssetRipper reads every file of the game) and the **exporting** step (it writes the project);
+- a progress bar for the AssetRipper download (first extraction only), the **loading** step (AssetRipper reads every file of the game) and the **exporting** step (it writes the project);
 - **AssetRipper log**, a foldout with AssetRipper's latest output lines — useful when something goes wrong.
 
 **Cancel** stops AssetRipper immediately; the output folder may then contain a partial export, which the next extraction replaces.

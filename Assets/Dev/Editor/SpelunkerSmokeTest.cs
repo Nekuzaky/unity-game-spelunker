@@ -80,7 +80,7 @@ namespace GameSpelunker
         {
             try
             {
-                var exe = AssetRipperInstaller.InstallAsync(null, CancellationToken.None).GetAwaiter().GetResult();
+                var exe = AssetRipperInstaller.EnsureInstalledAsync(null, CancellationToken.None).GetAwaiter().GetResult();
                 Debug.Log($"[Game Spelunker] AssetRipper installed: {exe} ({new FileInfo(exe).Length / (1024 * 1024)} MB)");
                 EditorApplication.Exit(0);
             }

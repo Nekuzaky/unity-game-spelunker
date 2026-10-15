@@ -33,12 +33,12 @@ In Unity **6000.3 or newer**: **Window → Package Manager → + → Install pac
 https://github.com/Nekuzaky/unity-game-spelunker.git?path=Packages/com.nekuzaky.game-spelunker
 ```
 
-Then open **Tools → Game Spelunker** (`Ctrl+Shift+G`). The first time, accept the usage notice and click
-**Install AssetRipper** (44 MB, downloaded from github.com/AssetRipper).
+Then open **Tools → Game Spelunker** (`Ctrl+Shift+G`). That's all: accept the usage notice the first time, and
+AssetRipper (44 MB, from github.com/AssetRipper) is downloaded by itself on your first extraction.
 
 This URL installs the latest version. Unity then keeps that exact version until you update: to get a newer one,
 paste the same URL again in **Install package from git URL…**. To stay on a specific version, add its tag at the
-end, for example `…game-spelunker#v0.1.1`.
+end, for example `…game-spelunker#v0.2.0`.
 
 Tested with Unity 6000.3.13f1 and 6000.5.9f1. Full documentation: **https://nekuzaky.com/docs/unity-game-spelunker**
 
@@ -47,8 +47,8 @@ Tested with Unity 6000.3.13f1 and 6000.5.9f1. Full documentation: **https://neku
 - **Find games** — lists the Unity games installed through Steam (all libraries), Epic Games, GOG and itch.io, or pick any folder.
 - **Build report** — without running the game: Unity version (and whether you have it), Mono / IL2CPP, render pipeline,
   scenes, size, asset bundles, game assemblies, native plugins, installed mod loaders (BepInEx, MelonLoader, Doorstop…).
-- **One-click AssetRipper** — downloads the official AssetRipper release on request (never bundled), or uses a copy you
-  already have.
+- **Nothing else to install** — the official AssetRipper release is downloaded on the first extraction (never bundled),
+  on Windows, macOS and Linux, or you point to a copy you already have.
 - **Extract** — as a Unity project (scenes, prefabs, materials, decompiled scripts) or as raw assets (PNG, models, sounds),
   with progress, log and cancel.
 - **Import into your project** — copies the extracted assets into `Assets/Spelunked/<Game>` of the project you have open,
@@ -58,7 +58,7 @@ Tested with Unity 6000.3.13f1 and 6000.5.9f1. Full documentation: **https://neku
 
 ## Importing into your project
 
-The **Import into this project** section (step 5) is built so it can never break the project you are working in:
+The **Import into this project** section (step 4) is built so it can never break the project you are working in:
 
 - Everything goes into its own folder (`Assets/Spelunked/<Game>` by default), with the original `.meta` files so prefabs,
   materials and textures stay linked.
@@ -74,9 +74,9 @@ The **Import into this project** section (step 5) is built so it can never break
 
 1. **Game** — *Find Unity games on this PC* or *Choose folder…* (the folder with the game's `.exe` and `*_Data`).
 2. **Build report** — read what the game is made of.
-3. **AssetRipper** — install it once.
-4. **Extract** — choose *Unity project* or *Raw assets* and an output folder, then **Extract**.
-5. **Explore** — **Open in Unity** opens `ExportedProject` in the right Unity version, or **Import into this project**.
+3. **Extract** — choose *Unity project* or *Raw assets* and an output folder, then **Extract**. The first extraction
+   downloads AssetRipper.
+4. **Explore** — **Open in Unity** opens `ExportedProject` in the right Unity version, or **Import into this project**.
    Click a script to open it in your code editor, or an asset type to show it in Explorer.
 
 Mono builds give fully decompiled scripts. IL2CPP builds give classes, fields and method signatures, but empty method

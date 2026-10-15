@@ -111,7 +111,6 @@ namespace GameSpelunker
                 page.Add(Css(new HelpBox(_reportError, HelpBoxMessageType.Error), "gs-card-help"));
             if (_report != null)
                 page.Add(ReportCard(_report));
-            page.Add(AssetRipperCard());
             if (_report != null)
                 page.Add(ExtractCard(_report, consent));
             if (_report != null && HasExport())
@@ -145,6 +144,9 @@ namespace GameSpelunker
                 "Only extract games you own. Extracted assets and code still belong to their authors: use them to learn or to " +
                 "build mods the developer allows, never redistribute them, and respect the game's license (EULA). " +
                 "Online games with anti-cheat may ban accounts for modified files."), "gs-text"));
+            card.Add(Css(new Label(
+                $"Extraction is done by AssetRipper (GPL-3.0). It is not bundled: the first extraction downloads the official " +
+                $"release {AssetRipperInstaller.Version} ({AssetRipperInstaller.DownloadSize}) from github.com/AssetRipper into your user folder."), "gs-text"));
             var toggle = new Toggle("I understand and will respect these rules") { value = consent };
             toggle.AddToClassList("gs-consent");
             toggle.RegisterValueChangedCallback(e => { EditorPrefs.SetBool(ConsentKey, e.newValue); Rebuild(); });
@@ -224,37 +226,49 @@ namespace GameSpelunker
             return card;
         }
 
-        private VisualElement AssetRipperCard()
+        /// <summary>
+        /// AssetRipper's status, folded away: it installs itself on the first extraction, so most users never open it.
+        /// Opens by itself when there is something to do by hand (no build for this computer).
+        /// </summary>
+        private VisualElement AssetRipperSection()
         {
             string? exe = AssetRipperInstaller.Executable;
-            var card = Card("d_Download-Available", "3 · AssetRipper", exe != null ? ("Ready", "gs-chip--ok") : ("Not installed", "gs-chip--warn"));
-            if (exe != null)
+            bool manual = exe == null && !AssetRipperInstaller.CanAutoInstall;
+            var section = new Foldout
             {
-                card.Add(Row("Executable", Css(new Label(exe), "gs-mono")));
-                if (AssetRipperInstaller.CustomExecutable != null)
-                    card.Add(Buttons(Button("Use the managed install instead", () => { AssetRipperInstaller.CustomExecutable = null; Rebuild(); })));
-                return card;
-            }
+                text = exe != null ? $"AssetRipper · ready"
+                    : manual ? "AssetRipper · choose its executable"
+                    : $"AssetRipper · downloaded on the first extraction ({AssetRipperInstaller.DownloadSize})",
+                value = manual,
+            };
+            section.AddToClassList("gs-log-foldout");
 
-            card.Add(Css(new Label($"Game Spelunker uses AssetRipper (GPL-3.0) to read game files. It is not bundled: install the official " +
-                                   $"release {AssetRipperInstaller.Version} ({AssetRipperInstaller.DownloadSize}, from github.com/AssetRipper) " +
-                                   "or point to one you already have."), "gs-text"));
-            card.Add(Buttons(
-                Button($"Install AssetRipper {AssetRipperInstaller.Version}", InstallAssetRipper, "gs-button--primary", "d_Download-Available"),
-                Button("Use existing…", () =>
-                {
-                    string file = EditorUtility.OpenFilePanel("AssetRipper executable", "", "exe");
-                    if (!string.IsNullOrEmpty(file)) { AssetRipperInstaller.CustomExecutable = file; Rebuild(); }
-                }, icon: "d_FolderOpened Icon"),
-                Button("Release page", () => Application.OpenURL(AssetRipperInstaller.ReleasePage), icon: "d_BuildSettings.Web.Small")));
-            if (_busy && _busyText.StartsWith("Downloading", StringComparison.Ordinal))
-                card.Add(Css(new ProgressBar { value = _progress * 100, title = _busyText }, "gs-progress"));
-            return card;
+            if (exe != null)
+                section.Add(Row("Executable", Css(new Label(exe), "gs-mono")));
+            else if (manual)
+                section.Add(Hint("AssetRipper has no automatic download for this computer. Download it from the release page and select its executable."));
+
+            var buttons = new List<Button>();
+            if (exe == null && !manual)
+                buttons.Add(Button("Install now", InstallAssetRipper, icon: "d_Download-Available"));
+            if (AssetRipperInstaller.CustomExecutable != null)
+                buttons.Add(Button("Use the managed install instead", () => { AssetRipperInstaller.CustomExecutable = null; Rebuild(); }));
+            buttons.Add(Button("Use existing…", () =>
+            {
+                string extension = Application.platform == RuntimePlatform.WindowsEditor ? "exe" : "";
+                string file = EditorUtility.OpenFilePanel("AssetRipper executable", "", extension);
+                if (!string.IsNullOrEmpty(file)) { AssetRipperInstaller.CustomExecutable = file; Rebuild(); }
+            }, icon: "d_FolderOpened Icon"));
+            buttons.Add(Button("Release page", () => Application.OpenURL(AssetRipperInstaller.ReleasePage), icon: "d_BuildSettings.Web.Small"));
+            var row = Buttons(buttons.ToArray());
+            row.SetEnabled(!_busy);
+            section.Add(row);
+            return section;
         }
 
         private VisualElement ExtractCard(BuildReport report, bool consent)
         {
-            var card = Card("d_Import", "4 · Extract", _busy && !_busyText.StartsWith("Downloading", StringComparison.Ordinal) ? ("Working…", "gs-chip--info") : ((string, string)?)null);
+            var card = Card("d_Import", "3 · Extract", _busy ? ("Working…", "gs-chip--info") : ((string, string)?)null);
 
             var modes = Css(new VisualElement(), "gs-modes");
             modes.Add(ModeOption(ExportMode.UnityProject, "d_UnityEditor.SceneHierarchyWindow", "Unity project", "Scenes, prefabs, materials and decompiled scripts you can open in Unity."));
@@ -268,7 +282,8 @@ namespace GameSpelunker
             output.RegisterValueChangedCallback(e => _output = e.newValue);
             card.Add(Row("Output folder", output));
 
-            if (_busy && !_busyText.StartsWith("Downloading", StringComparison.Ordinal))
+            bool ripperAvailable = AssetRipperInstaller.Executable != null || AssetRipperInstaller.CanAutoInstall;
+            if (_busy)
             {
                 card.Add(Css(new ProgressBar { value = _progress * 100, title = _busyText }, "gs-progress"));
                 card.Add(Buttons(Button("Cancel", () => _cts?.Cancel(), "gs-button--danger", "d_winbtn_win_close")));
@@ -276,15 +291,16 @@ namespace GameSpelunker
             else
             {
                 var extract = Button("Extract", Extract, "gs-button--primary gs-button--big", "d_PlayButton");
-                extract.SetEnabled(consent && AssetRipperInstaller.Executable != null && !_busy);
+                extract.SetEnabled(consent && ripperAvailable);
                 card.Add(Buttons(extract, Button("Choose output…", () =>
                 {
                     string folder = EditorUtility.OpenFolderPanel("Where to put the extracted game", _output, "");
                     if (!string.IsNullOrEmpty(folder)) { _output = folder; Rebuild(); }
                 }, icon: "d_FolderOpened Icon")));
                 if (!consent) card.Add(Hint("Accept the notice at the top to enable extraction."));
-                else if (AssetRipperInstaller.Executable == null) card.Add(Hint("Install AssetRipper first (step 3)."));
+                else if (!ripperAvailable) card.Add(Hint("Select an AssetRipper executable below first."));
             }
+            card.Add(AssetRipperSection());
 
             if (_message.Length > 0)
                 card.Add(Css(new HelpBox(_message, _message.StartsWith("Failed", StringComparison.Ordinal) ? HelpBoxMessageType.Error : HelpBoxMessageType.Info), "gs-card-help"));
@@ -316,7 +332,7 @@ namespace GameSpelunker
 
         private VisualElement ExploreCard()
         {
-            var card = Card("d_ViewToolZoom", "5 · Explore", ("Extracted", "gs-chip--ok"));
+            var card = Card("d_ViewToolZoom", "4 · Explore", ("Extracted", "gs-chip--ok"));
             string? version = ExtractedProject.UnityVersionOf(_output);
             string? editor = ExtractedProject.FindEditor(version);
             card.Add(Buttons(
@@ -532,16 +548,22 @@ namespace GameSpelunker
         private void InstallAssetRipper()
         {
             _busy = true;
-            _busyText = $"Downloading AssetRipper {AssetRipperInstaller.Version}…";
+            _busyText = DownloadText;
             _progress = 0;
+            _message = "";
             _cts = new CancellationTokenSource();
-            var progress = new Progress<float>(p => RunOnMain(() => _progress = p));
+            var token = _cts.Token;
+            var progress = DownloadProgress();
             Task.Run(async () =>
             {
                 try
                 {
-                    await AssetRipperInstaller.InstallAsync(progress, _cts.Token).ConfigureAwait(false);
+                    await AssetRipperInstaller.EnsureInstalledAsync(progress, token).ConfigureAwait(false);
                     RunOnMain(() => _message = "AssetRipper installed.");
+                }
+                catch (Exception ex) when (token.IsCancellationRequested && ex is OperationCanceledException)
+                {
+                    RunOnMain(() => _message = "Cancelled.");
                 }
                 catch (Exception ex)
                 {
@@ -555,9 +577,17 @@ namespace GameSpelunker
             Rebuild();
         }
 
+        private static string DownloadText => $"Downloading AssetRipper {AssetRipperInstaller.Version} ({AssetRipperInstaller.DownloadSize})…";
+
+        private IProgress<float> DownloadProgress() => new Progress<float>(p => RunOnMain(() =>
+        {
+            _progress = p;
+            _busyText = DownloadText;
+        }));
+
         private void Extract()
         {
-            if (_report == null || AssetRipperInstaller.Executable is not { } exe)
+            if (_report == null)
                 return;
 
             // Only ever clean a folder that holds a previous extraction, never an arbitrary folder.
@@ -579,17 +609,36 @@ namespace GameSpelunker
             var report = _report;
             string output = _output;
             var mode = _mode;
+            bool download = AssetRipperInstaller.Executable == null;
             _busy = true;
-            _busyText = "Starting AssetRipper…";
+            _busyText = download ? DownloadText : "Starting AssetRipper…";
             _progress = 0;
             _message = "";
             _log.Clear();
             _cts = new CancellationTokenSource();
             var token = _cts.Token;
-            var started = DateTime.Now;
+            var progress = DownloadProgress();
 
             Task.Run(async () =>
             {
+                // First extraction on this computer: fetch AssetRipper, then carry on with the same click.
+                string exe;
+                try
+                {
+                    exe = await AssetRipperInstaller.EnsureInstalledAsync(progress, token).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    RunOnMain(() =>
+                    {
+                        _message = token.IsCancellationRequested ? "Cancelled." : "Failed to install AssetRipper: " + ex.Message;
+                        _busy = false;
+                    });
+                    return;
+                }
+                RunOnMain(() => { _progress = 0; _busyText = "Starting AssetRipper…"; });
+                var started = DateTime.Now; // the download does not count in the extraction time
+
                 using var session = new AssetRipperSession(exe);
                 session.Log += line => RunOnMain(() =>
                 {

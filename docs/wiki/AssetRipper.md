@@ -4,22 +4,24 @@ Game Spelunker does not read game assets itself: it drives **[AssetRipper](https
 
 ## Installing AssetRipper
 
-In **3 · AssetRipper**, click **Install AssetRipper 2.0.0**. Game Spelunker then:
+There is nothing to install by hand. The first time you click **Extract**, Game Spelunker:
 
-1. downloads the official Windows release (`AssetRipper_win_x64.zip`, 44 MB) from AssetRipper's GitHub releases page;
-2. unpacks it into `%LOCALAPPDATA%\GameSpelunker\AssetRipper\2.0.0\`;
-3. shows the badge **Ready** with the path of `AssetRipper.GUI.Free.exe`.
+1. downloads the official AssetRipper 2.0.0 release for your computer from AssetRipper's GitHub releases page — Windows (`AssetRipper_win_x64.zip`, 44 MB), macOS or Linux, Intel/AMD or ARM;
+2. unpacks it into your local app data folder (`%LOCALAPPDATA%\GameSpelunker\AssetRipper\2.0.0\` on Windows);
+3. carries on with the extraction, in the same click.
 
-You only do this once per computer: every project where Game Spelunker is installed uses the same copy.
+The progress bar shows the download first, then the extraction. This happens once per computer: every project where Game Spelunker is installed uses the same copy.
+
+To download it ahead of time, open the **AssetRipper** foldout at the bottom of **3 · Extract** and click **Install now**. The foldout title shows **AssetRipper · ready** once it is installed.
 
 > [!NOTE]
-> AssetRipper is licensed under the GPL-3.0. That is why it is **never bundled** with Game Spelunker: it is downloaded from its official source, on request, onto your own computer.
+> AssetRipper is licensed under the GPL-3.0. That is why it is **never bundled** with Game Spelunker: it is downloaded from its official source onto your own computer, and the usage notice says so before the first extraction.
 
 ## Using a copy you already have
 
-Click **Use existing…** and select an `AssetRipper.GUI.Free.exe` you downloaded yourself. Game Spelunker remembers that path. **Use the managed install instead** goes back to the copy Game Spelunker downloaded.
+In the **AssetRipper** foldout, click **Use existing…** and select an `AssetRipper.GUI.Free` executable you downloaded yourself. Game Spelunker remembers that path. **Use the managed install instead** goes back to the copy Game Spelunker downloaded.
 
-On **macOS and Linux**, the automatic download is not available yet: download AssetRipper from its **[releases page](https://github.com/AssetRipper/AssetRipper/releases/tag/2.0.0)** and use **Use existing…**.
+On a computer AssetRipper has no build for, the foldout opens by itself: download AssetRipper from its **[releases page](https://github.com/AssetRipper/AssetRipper/releases/tag/2.0.0)** and use **Use existing…**.
 
 ## Supported version
 
@@ -37,4 +39,4 @@ You never see AssetRipper's own window. For each extraction, Game Spelunker:
 
 ## Removing AssetRipper
 
-Delete `%LOCALAPPDATA%\GameSpelunker\AssetRipper\`. The card goes back to **Not installed**.
+Delete `%LOCALAPPDATA%\GameSpelunker\AssetRipper\` (on Windows). The next extraction downloads it again.

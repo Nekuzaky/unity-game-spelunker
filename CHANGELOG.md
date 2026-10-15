@@ -3,6 +3,22 @@
 All notable changes to Game Spelunker are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-10-15
+
+### Changed
+- Nothing to install besides the package: the first **Extract** downloads AssetRipper 2.0.0 if it is missing, then
+  extracts in the same click. The separate **3 · AssetRipper** step is gone; steps are now Game, Build report,
+  Extract, Explore.
+- AssetRipper's status, **Install now**, **Use existing…** and the release page moved to an **AssetRipper** foldout
+  at the bottom of the Extract card.
+- The usage notice says that the first extraction downloads AssetRipper from github.com/AssetRipper.
+
+### Added
+- Automatic AssetRipper download on macOS and Linux (x64 and ARM64) and on Windows ARM64.
+
+### Fixed
+- An interrupted download or unpack no longer leaves a half-installed AssetRipper that looks ready.
+
 ## [0.1.1] - 2026-10-15
 
 ### Changed

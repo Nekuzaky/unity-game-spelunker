@@ -1,7 +1,9 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEditor;
@@ -10,20 +12,46 @@ namespace GameSpelunker
 {
     /// <summary>
     /// Finds or downloads AssetRipper (GPL-3.0, https://github.com/AssetRipper/AssetRipper). It is never bundled with
-    /// Game Spelunker: the official release is downloaded on request into the user's local app data.
+    /// Game Spelunker: the official release for this computer is downloaded into the user's local app data, either on
+    /// the first extraction or when the user asks for it.
     /// </summary>
     public static class AssetRipperInstaller
     {
         /// <summary>The version whose HTTP API Game Spelunker was written against.</summary>
         public const string Version = "2.0.0";
         public const string ReleasePage = "https://github.com/AssetRipper/AssetRipper/releases/tag/" + Version;
-        public const string DownloadUrl = "https://github.com/AssetRipper/AssetRipper/releases/download/" + Version + "/AssetRipper_win_x64.zip";
-        public const string DownloadSize = "44 MB";
         private const string CustomPathKey = "GameSpelunker.AssetRipperPath";
-        private const string ExecutableName = "AssetRipper.GUI.Free.exe";
 
-        public static string InstallFolder =>
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GameSpelunker", "AssetRipper", Version);
+        private static readonly object InstallLock = new object();
+        private static Task<string>? _install;
+
+        /// <summary>The release archive for this OS and CPU, with its size in MB; null when AssetRipper has no build for it.</summary>
+        private static (string asset, int sizeMb)? Release
+        {
+            get
+            {
+                bool arm = RuntimeInformation.OSArchitecture == Architecture.Arm64;
+                bool x64 = RuntimeInformation.OSArchitecture == Architecture.X64;
+                if (!arm && !x64) return null;
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return arm ? ("AssetRipper_win_arm64.zip", 42) : ("AssetRipper_win_x64.zip", 44);
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return arm ? ("AssetRipper_mac_arm64.tar.xz", 27) : ("AssetRipper_mac_x64.tar.xz", 32);
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) return arm ? ("AssetRipper_linux_arm64.tar.xz", 27) : ("AssetRipper_linux_x64.tar.xz", 31);
+                return null;
+            }
+        }
+
+        /// <summary>True when AssetRipper can be downloaded automatically on this computer.</summary>
+        public static bool CanAutoInstall => Release != null;
+
+        /// <summary>Download size shown to the user, e.g. "44 MB".</summary>
+        public static string DownloadSize => Release is { } r ? r.sizeMb + " MB" : "?";
+
+        public static string ExecutableName => RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "AssetRipper.GUI.Free.exe" : "AssetRipper.GUI.Free";
+
+        private static string RootFolder =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GameSpelunker", "AssetRipper");
+
+        public static string InstallFolder => Path.Combine(RootFolder, Version);
 
         /// <summary>A path chosen by the user (an AssetRipper they already have), or null.</summary>
         public static string? CustomExecutable
@@ -48,43 +76,94 @@ namespace GameSpelunker
             }
         }
 
-        public static bool IsSupportedPlatform => Environment.OSVersion.Platform == PlatformID.Win32NT;
-
-        /// <summary>Downloads and unpacks the official Windows release. Progress is 0–1.</summary>
-        public static async Task<string> InstallAsync(IProgress<float>? progress, CancellationToken token)
+        /// <summary>
+        /// Returns the executable, downloading the official release first when it is missing. Concurrent callers share
+        /// the same download. Progress is 0–1.
+        /// </summary>
+        public static Task<string> EnsureInstalledAsync(IProgress<float>? progress, CancellationToken token)
         {
-            if (!IsSupportedPlatform)
-                throw new PlatformNotSupportedException("Automatic install is Windows-only for now. Download AssetRipper from " + ReleasePage + " and pick its executable.");
-
-            Directory.CreateDirectory(InstallFolder);
-            string zip = Path.Combine(InstallFolder, "download.zip");
-
-            using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) })
-            using (var response = await http.GetAsync(DownloadUrl, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false))
+            if (Executable is { } exe)
+                return Task.FromResult(exe);
+            lock (InstallLock)
             {
-                response.EnsureSuccessStatusCode();
-                long total = response.Content.Headers.ContentLength ?? -1;
-                using var input = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-                using var output = File.Create(zip);
-                var buffer = new byte[81920];
-                long done = 0;
-                int read;
-                while ((read = await input.ReadAsync(buffer, 0, buffer.Length, token).ConfigureAwait(false)) > 0)
-                {
-                    await output.WriteAsync(buffer, 0, read, token).ConfigureAwait(false);
-                    done += read;
-                    if (total > 0)
-                        progress?.Report(done / (float)total);
-                }
+                if (_install == null || _install.IsCompleted)
+                    _install = InstallAsync(progress, token);
+                return _install;
             }
+        }
 
-            ZipFile.ExtractToDirectory(zip, InstallFolder);
-            File.Delete(zip);
+        /// <summary>Downloads and unpacks the official release for this computer. Progress is 0–1.</summary>
+        private static async Task<string> InstallAsync(IProgress<float>? progress, CancellationToken token)
+        {
+            if (Release is not { } release)
+                throw new PlatformNotSupportedException("AssetRipper has no build for this computer. Download it from " + ReleasePage + " and use \"Use existing…\".");
 
-            string exe = Path.Combine(InstallFolder, ExecutableName);
-            if (!File.Exists(exe))
-                throw new FileNotFoundException("The downloaded archive does not contain " + ExecutableName);
-            return exe;
+            // Unpack next to the final folder, then move it in place: a half-finished install never looks ready.
+            Directory.CreateDirectory(RootFolder);
+            string archive = Path.Combine(RootFolder, release.asset);
+            string staging = InstallFolder + ".partial";
+            if (Directory.Exists(staging))
+                Directory.Delete(staging, true);
+
+            try
+            {
+                string url = $"https://github.com/AssetRipper/AssetRipper/releases/download/{Version}/{release.asset}";
+                using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) })
+                using (var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false))
+                {
+                    response.EnsureSuccessStatusCode();
+                    long total = response.Content.Headers.ContentLength ?? -1;
+                    using var input = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                    using var output = File.Create(archive);
+                    var buffer = new byte[81920];
+                    long done = 0;
+                    int read;
+                    while ((read = await input.ReadAsync(buffer, 0, buffer.Length, token).ConfigureAwait(false)) > 0)
+                    {
+                        await output.WriteAsync(buffer, 0, read, token).ConfigureAwait(false);
+                        done += read;
+                        if (total > 0)
+                            progress?.Report(done / (float)total);
+                    }
+                }
+
+                Directory.CreateDirectory(staging);
+                if (archive.EndsWith(".zip", StringComparison.Ordinal))
+                    ZipFile.ExtractToDirectory(archive, staging);
+                else
+                    ExtractTarXz(archive, staging); // .NET cannot read xz; tar keeps the executable bit.
+
+                if (!File.Exists(Path.Combine(staging, ExecutableName)))
+                    throw new FileNotFoundException("The downloaded archive does not contain " + ExecutableName);
+
+                // The final folder may already hold AssetRipper's logs from an install that was removed since.
+                if (Directory.Exists(InstallFolder))
+                    Directory.Delete(InstallFolder, true);
+                Directory.Move(staging, InstallFolder);
+                return Path.Combine(InstallFolder, ExecutableName);
+            }
+            finally
+            {
+                if (File.Exists(archive))
+                    File.Delete(archive);
+                if (Directory.Exists(staging))
+                    Directory.Delete(staging, true);
+            }
+        }
+
+        private static void ExtractTarXz(string archive, string folder)
+        {
+            var info = new ProcessStartInfo("tar", $"-xJf \"{archive}\" -C \"{folder}\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+            };
+            using var process = Process.Start(info) ?? throw new InvalidOperationException("Could not start tar.");
+            string error = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException($"tar could not unpack {Path.GetFileName(archive)}: {error.Trim()}");
         }
     }
 }

@@ -15,7 +15,7 @@ Game Spelunker is an editor window for Unity 6000.3 and newer. Point it at a Uni
 
 - **Find games** installed through Steam, Epic Games, GOG and itch.io, or pick any folder.
 - **Build report** read straight from the game files: Unity version, Mono or IL2CPP, render pipeline, scenes, size, asset bundles, game assemblies, native plugins and installed mod loaders.
-- **One-click AssetRipper**: the official AssetRipper release is downloaded on request (it is never bundled), or you point to a copy you already have.
+- **Nothing else to install**: the official AssetRipper release is downloaded automatically on the first extraction (it is never bundled), or you point to a copy you already have.
 - **Extract** the game as a Unity project (scenes, prefabs, materials, decompiled scripts) or as raw assets (PNG, models, sounds), with progress, log and cancel.
 - **Import into your project**: copy the extracted assets into a folder of the project you have open, without any risk of breaking it.
 - **Explore**: open the export in the matching Unity version, see what's inside by asset type, search the game's scripts and open them in your code editor.
@@ -33,7 +33,7 @@ Game Spelunker is an editor window for Unity 6000.3 and newer. Point it at a Uni
 | **[Getting Started](Getting-Started)** | Your first extraction, step by step. |
 | **[Finding Games](Finding-Games)** | Where Game Spelunker looks for games, and how to pick one by hand. |
 | **[Build Report](Build-Report)** | Every line of the report, and what Mono and IL2CPP mean for you. |
-| **[AssetRipper](AssetRipper)** | Installing AssetRipper, using your own copy, where it lives. |
+| **[AssetRipper](AssetRipper)** | The automatic download, using your own copy, where it lives. |
 | **[Extracting](Extracting)** | Unity project or raw assets, the output folder, what an export contains. |
 | **[Opening the Project](Opening-the-Project)** | Opening an extracted project, Safe Mode, pink materials, missing packages. |
 | **[Importing into Your Project](Importing-into-Your-Project)** | Bringing assets into the project you work in, and the rules that keep it safe. |
@@ -50,7 +50,7 @@ Game Spelunker is an editor window for Unity 6000.3 and newer. Point it at a Uni
 | | |
 | :--- | :--- |
 | **Unity** | 6000.3 or newer (tested with 6000.3.13f1 and 6000.5.9f1) |
-| **Operating system** | Windows for the automatic AssetRipper download; the rest of the window works wherever Unity runs |
+| **Operating system** | Windows, macOS or Linux (x64 or ARM64) |
 | **Disk space** | About 130 MB for AssetRipper, plus roughly the size of the game for each extraction |
 | **Network** | Only to install the package and to download AssetRipper once |
 

@@ -13,10 +13,10 @@ No. Game Spelunker only reads the game folder. Everything it writes goes to the 
 Only to download AssetRipper once, from GitHub. AssetRipper runs locally and only listens on `127.0.0.1`. The list of games found on your computer never leaves it.
 
 **Why is AssetRipper downloaded separately?**
-AssetRipper is GPL-3.0 licensed; Game Spelunker is MIT. Keeping them separate respects both licenses, and you always get AssetRipper from its official source.
+AssetRipper is GPL-3.0 licensed; Game Spelunker is MIT. Keeping them separate respects both licenses, and you always get AssetRipper from its official source. You still only install Game Spelunker: AssetRipper is downloaded automatically on the first extraction.
 
 **Can I use it on macOS or Linux?**
-The window works wherever Unity runs, but the automatic AssetRipper download is Windows-only for now. On other systems, download AssetRipper yourself and use **Use existing…**.
+Yes. AssetRipper is downloaded automatically on Windows, macOS and Linux (Intel/AMD and ARM). On macOS and Linux, unpacking uses the system's `tar`.
 
 **Which Unity versions are supported?**
 Unity 6000.3 and newer. The games you inspect can be made with any Unity version AssetRipper supports, including much older ones.
@@ -34,4 +34,4 @@ No. IL2CPP compiles C# to native code; method bodies cannot be recovered as C#. 
 Paste the Git URL again in the Package Manager. See **[Installation](Installation)**.
 
 **Where are my extractions and AssetRipper stored?**
-Extractions in `Documents\Game Spelunker\` by default, AssetRipper in `%LOCALAPPDATA%\GameSpelunker\AssetRipper\`. See **[Reference](Reference)**.
+Extractions in `Documents\Game Spelunker\` by default, AssetRipper in `%LOCALAPPDATA%\GameSpelunker\AssetRipper\` (Windows). See **[Reference](Reference)**.

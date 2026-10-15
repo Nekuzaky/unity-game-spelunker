@@ -14,9 +14,8 @@
 | **Before you dig** | Usage notice; must be accepted before extracting |
 | **1 · Game** | Game folder, **Choose folder…**, **Find Unity games on this PC** |
 | **2 · Build report** | Unity version, scripting backend, render pipeline, scenes, size, asset bundles, assemblies, native plugins, mod support |
-| **3 · AssetRipper** | Install status, **Install AssetRipper**, **Use existing…**, release page |
-| **4 · Extract** | Export mode, output folder, **Extract** / **Cancel**, progress, log |
-| **5 · Explore** | **Open in Unity**, **Open folder**, **Import into this project**, asset types, game scripts |
+| **3 · Extract** | Export mode, output folder, **Extract** / **Cancel**, progress, log; **AssetRipper** foldout: status, **Install now**, **Use existing…**, release page |
+| **4 · Explore** | **Open in Unity**, **Open folder**, **Import into this project**, asset types, game scripts |
 
 The header buttons open this documentation, the GitHub issue form, and refresh the window.
 
@@ -64,7 +63,7 @@ The window is built on a few public editor classes you can call from your own ed
 | :--- | :--- |
 | `BuildInspector.Inspect(path)` | Returns a `BuildReport` for a game folder |
 | `GameFinder.FindInstalledUnityGames()` | Lists installed Unity games |
-| `AssetRipperInstaller.Executable` / `InstallAsync(…)` | Locates or downloads AssetRipper |
+| `AssetRipperInstaller.Executable` / `EnsureInstalledAsync(…)` | Locates AssetRipper, or downloads it when missing |
 | `AssetRipperSession` | `StartAsync`, `LoadAsync(dataFolder)`, `ExportAsync(output, mode)`, with `Log` and `Progress` events |
 | `ExtractedProject.FindScripts(exportFolder)` | Lists the game scripts of an export |
 | `ProjectImporter.Import(exportFolder, gameName, options)` | Imports an export into the open project |

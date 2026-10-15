@@ -19,7 +19,7 @@ https://github.com/Nekuzaky/unity-game-spelunker.git?path=Packages/com.nekuzaky.
 
 4. Wait for Unity to compile, then open **Tools → Game Spelunker** (or press `Ctrl+Shift+G`, `Cmd+Shift+G` on macOS).
 
-The first time you open the window, accept the usage notice and install AssetRipper — see **[Getting Started](Getting-Started)**.
+That's the only thing to install. The first time you open the window, accept the usage notice; AssetRipper is downloaded by itself on your first extraction — see **[Getting Started](Getting-Started)**.
 
 > [!NOTE]
 > You can also add the package by hand: open `Packages/manifest.json` in your project and add this line inside `"dependencies"`:

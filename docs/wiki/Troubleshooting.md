@@ -22,7 +22,7 @@
 | :--- | :--- |
 | **"Failed to install AssetRipper"** | Check your connection, or that a firewall/proxy allows GitHub downloads. You can download AssetRipper 2.0.0 yourself and use **Use existing…**. |
 | **"AssetRipper did not start within 60 seconds"** | An antivirus may be scanning or blocking `AssetRipper.GUI.Free.exe`. Allow it, then try again. |
-| **"AssetRipper stopped while starting"** | Run `AssetRipper.GUI.Free.exe` once by hand to see its error. Re-install by deleting `%LOCALAPPDATA%\GameSpelunker\AssetRipper\` and clicking **Install AssetRipper** again. |
+| **"AssetRipper stopped while starting"** | Run `AssetRipper.GUI.Free.exe` once by hand to see its error. Re-install by deleting `%LOCALAPPDATA%\GameSpelunker\AssetRipper\`: the next extraction downloads it again. |
 
 ## Extracting
 

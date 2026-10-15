@@ -4,7 +4,7 @@ Reading a game's code is often the fastest way to understand how it works: how t
 
 ## The script list
 
-At the bottom of **5 · Explore**, **Game scripts** lists the game's own scripts — the engine, Unity packages and common libraries are left out, so you only see what the developers wrote.
+At the bottom of **4 · Explore**, **Game scripts** lists the game's own scripts — the engine, Unity packages and common libraries are left out, so you only see what the developers wrote.
 
 - Each line shows the **class name** and its folder (`Assembly/Namespace`).
 - The search field filters by name or folder: try `Player`, `Enemy`, `Save`, `Inventory`, `Manager`.

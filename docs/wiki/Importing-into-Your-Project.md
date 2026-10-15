@@ -10,7 +10,7 @@
 ## Importing
 
 1. Extract the game as a **Unity project** (see **[Extracting](Extracting)**).
-2. In **5 · Explore → Import into this project**, check the destination in **Into folder** — by default `Assets/Spelunked/<Game>`.
+2. In **4 · Explore → Import into this project**, check the destination in **Into folder** — by default `Assets/Spelunked/<Game>`.
 3. Choose what to bring:
    - **Scenes** — on by default.
    - **Decompiled scripts** — off by default; see below.

@@ -27,23 +27,21 @@ Details in **[Finding Games](Finding-Games)**.
 
 The badge next to the title says whether the game uses **Mono** (scripts can be fully decompiled) or **IL2CPP** (only the structure of the code can be recovered). Every field is explained in **[Build Report](Build-Report)**.
 
-## 5. Install AssetRipper (once)
+## 5. Extract
 
-**3 · AssetRipper** shows **Not installed** the first time. Click **Install AssetRipper 2.0.0**: the official release (44 MB) is downloaded from GitHub into your user folder. The badge turns to **Ready**. You only do this once per computer. See **[AssetRipper](AssetRipper)**.
-
-## 6. Extract
-
-In **4 · Extract**:
+In **3 · Extract**:
 
 1. Choose what to export: **Unity project** (the whole game as a project you can open) or **Raw assets** (plain files).
 2. Keep the suggested output folder (`Documents\Game Spelunker\<Game>`) or click **Choose output…**.
 3. Click **Extract**.
 
+The very first time, Game Spelunker downloads AssetRipper (44 MB on Windows) from GitHub before extracting — once per computer, nothing to click. See **[AssetRipper](AssetRipper)**.
+
 A progress bar shows the loading and exporting steps, and **AssetRipper log** shows its output. **Cancel** stops everything. See **[Extracting](Extracting)**.
 
-## 7. Explore
+## 6. Explore
 
-When the extraction is done, **5 · Explore** appears:
+When the extraction is done, **4 · Explore** appears:
 
 ![Explore the extracted game](images/window-explore.png)
 

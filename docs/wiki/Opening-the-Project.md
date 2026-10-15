@@ -1,6 +1,6 @@
 # Opening the Project
 
-After a **Unity project** extraction, the **5 · Explore** card offers two ways to open it.
+After a **Unity project** extraction, the **4 · Explore** card offers two ways to open it.
 
 ## Open in Unity
 
