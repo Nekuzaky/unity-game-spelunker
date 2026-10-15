@@ -64,25 +64,27 @@ namespace GameSpelunker
             set => EditorPrefs.SetString(CustomPathKey, value ?? "");
         }
 
-        /// <summary>The AssetRipper executable to use, or null when it is not installed yet.</summary>
-        public static string? Executable
+        /// <summary>The AssetRipper executable to use, or null when it is not installed yet. Main thread only (EditorPrefs).</summary>
+        public static string? Executable => CustomExecutable ?? ManagedExecutable;
+
+        /// <summary>The copy Game Spelunker downloaded, or null. Safe on any thread.</summary>
+        private static string? ManagedExecutable
         {
             get
             {
-                if (CustomExecutable is { } custom)
-                    return custom;
                 string installed = Path.Combine(InstallFolder, ExecutableName);
                 return File.Exists(installed) ? installed : null;
             }
         }
 
         /// <summary>
-        /// Returns the executable, downloading the official release first when it is missing. Concurrent callers share
-        /// the same download. Progress is 0–1.
+        /// Returns <paramref name="executable"/> when there is one, otherwise the managed install, downloading the
+        /// official release first when it is missing. Safe on any thread: read <see cref="Executable"/> on the main
+        /// thread and pass it in. Concurrent callers share the same download. Progress is 0–1.
         /// </summary>
-        public static Task<string> EnsureInstalledAsync(IProgress<float>? progress, CancellationToken token)
+        public static Task<string> EnsureInstalledAsync(string? executable, IProgress<float>? progress, CancellationToken token)
         {
-            if (Executable is { } exe)
+            if ((executable ?? ManagedExecutable) is { } exe)
                 return Task.FromResult(exe);
             lock (InstallLock)
             {

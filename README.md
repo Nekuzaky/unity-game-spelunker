@@ -38,7 +38,7 @@ AssetRipper (44 MB, from github.com/AssetRipper) is downloaded by itself on your
 
 This URL installs the latest version. Unity then keeps that exact version until you update: to get a newer one,
 paste the same URL again in **Install package from git URL…**. To stay on a specific version, add its tag at the
-end, for example `…game-spelunker#v0.2.0`.
+end, for example `…game-spelunker#v0.2.1`.
 
 Tested with Unity 6000.3.13f1 and 6000.5.9f1. Full documentation: **https://nekuzaky.com/docs/unity-game-spelunker**
 

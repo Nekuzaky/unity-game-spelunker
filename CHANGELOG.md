@@ -3,6 +3,12 @@
 All notable changes to Game Spelunker are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-10-15
+
+### Fixed
+- **Extract** failed with "GetString can only be called from the main thread": AssetRipper's location was read from
+  EditorPrefs on a worker thread. It is now read before the extraction starts.
+
 ## [0.2.0] - 2026-10-15
 
 ### Changed

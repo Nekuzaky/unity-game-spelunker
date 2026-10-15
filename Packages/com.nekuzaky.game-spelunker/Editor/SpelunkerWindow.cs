@@ -558,7 +558,7 @@ namespace GameSpelunker
             {
                 try
                 {
-                    await AssetRipperInstaller.EnsureInstalledAsync(progress, token).ConfigureAwait(false);
+                    await AssetRipperInstaller.EnsureInstalledAsync(null, progress, token).ConfigureAwait(false);
                     RunOnMain(() => _message = "AssetRipper installed.");
                 }
                 catch (Exception ex) when (token.IsCancellationRequested && ex is OperationCanceledException)
@@ -609,7 +609,8 @@ namespace GameSpelunker
             var report = _report;
             string output = _output;
             var mode = _mode;
-            bool download = AssetRipperInstaller.Executable == null;
+            string? installed = AssetRipperInstaller.Executable; // EditorPrefs: read here, not in the task
+            bool download = installed == null;
             _busy = true;
             _busyText = download ? DownloadText : "Starting AssetRipper…";
             _progress = 0;
@@ -625,7 +626,7 @@ namespace GameSpelunker
                 string exe;
                 try
                 {
-                    exe = await AssetRipperInstaller.EnsureInstalledAsync(progress, token).ConfigureAwait(false);
+                    exe = await AssetRipperInstaller.EnsureInstalledAsync(installed, progress, token).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {

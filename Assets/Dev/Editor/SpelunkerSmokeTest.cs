@@ -24,6 +24,11 @@ namespace GameSpelunker
                 if (exe == null)
                     throw new InvalidOperationException("AssetRipper is not installed; pass -gsAssetRipper.");
 
+                // The window resolves AssetRipper on a worker thread: that path must not touch main-thread-only APIs.
+                string resolved = System.Threading.Tasks.Task.Run(() => AssetRipperInstaller.EnsureInstalledAsync(null, null, CancellationToken.None))
+                    .GetAwaiter().GetResult();
+                Debug.Log($"[Game Spelunker] AssetRipper resolved off the main thread: {resolved}");
+
                 var report = BuildInspector.Inspect(game);
                 Debug.Log($"[Game Spelunker] {report.Name} by {report.Company}: Unity {report.UnityVersion}, {report.Backend}, {report.RenderPipeline}, " +
                           $"{report.SceneCount} scene(s), {BuildInspector.FormatSize(report.TotalSize)}, assemblies: {string.Join(", ", report.GameAssemblies)}, " +
@@ -80,7 +85,7 @@ namespace GameSpelunker
         {
             try
             {
-                var exe = AssetRipperInstaller.EnsureInstalledAsync(null, CancellationToken.None).GetAwaiter().GetResult();
+                var exe = AssetRipperInstaller.EnsureInstalledAsync(null, null, CancellationToken.None).GetAwaiter().GetResult();
                 Debug.Log($"[Game Spelunker] AssetRipper installed: {exe} ({new FileInfo(exe).Length / (1024 * 1024)} MB)");
                 EditorApplication.Exit(0);
             }
