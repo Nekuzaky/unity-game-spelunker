@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ## [Unreleased]
 
 ### Added
+- **Material repair.** AssetRipper replaces the shaders it cannot recover with placeholders that draw one flat
+  texture (grey rocks, white terrain, square grass). Extracted projects now repair their materials the first time they
+  open: back on the real Unity shader when the game used a stock one, otherwise rebuilt on Standard, URP Lit or HDRP
+  Lit with their textures, cut-out for foliage, a terrain shader for terrains, a particle shader for particles,
+  Unity's procedural sky for custom skies and a tinted see-through surface for water.
+  Placeholders that hid a built-in shader (the terrain's grass shader, Standard (Specular setup)) are renamed. Imports
+  into your project are repaired the same way, and **Assets → Game Spelunker → Repair Materials** runs it on any folder.
+- Extracted projects are prepared before they open: game scripts no longer run in the editor (`[ExecuteInEditMode]` and
+  `[ExecuteAlways]` are removed), so decompiled post effects, weather or UI code can no longer flood the Console or
+  crash Unity, and code generated for the game's build (`__JobReflectionRegistrationOutput__…`) is removed.
 - Game icons in the list of found games and next to the game's name in the build report, for games installed by
   Steam. They come from Steam's local library cache (`appcache/librarycache`): nothing is downloaded.
 

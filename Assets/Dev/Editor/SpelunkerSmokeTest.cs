@@ -61,6 +61,13 @@ namespace GameSpelunker
                 var project = ExtractedProject.ProjectFolder(output);
                 Debug.Log($"[Game Spelunker] Project folder: {project}, version {ExtractedProject.UnityVersionOf(output)}");
 
+                var prepared = ExtractedProject.PrepareForOpening(output, ExtractedProject.ToolsSource());
+                var again = ExtractedProject.PrepareForOpening(output, ExtractedProject.ToolsSource()); // must be a no-op
+                bool toolsCopied = File.Exists(Path.Combine(project, "Assets", "GameSpelunker", "Editor", "MaterialRepair.cs"))
+                                   && File.Exists(Path.Combine(project, "Assets", "GameSpelunker", "Editor", "ExtractedProjectSetup.cs"));
+                Debug.Log($"[Game Spelunker] Prepared: {prepared.ScriptsStopped} script(s) stopped in edit mode, {prepared.GeneratedRemoved} generated removed, " +
+                          $"tools {(toolsCopied ? "installed" : "MISSING")}, second pass changed {again.ScriptsStopped}");
+
                 // Import into this project, scripts included (isolated behind a define), then clean up.
                 string target = ProjectImporter.DefaultTarget("Smoke Test");
                 var import = ProjectImporter.Import(output, report.Name, new ImportOptions { TargetFolder = target, IncludeScripts = true });
@@ -68,16 +75,36 @@ namespace GameSpelunker
                 Debug.Log($"[Game Spelunker] Imported {import.FilesCopied} file(s) into {import.TargetFolder}, {import.GuidConflicts} GUID conflict(s), " +
                           $"skipped [{string.Join(", ", import.SkippedFolders)}], scripts assembly {Path.GetFileName(asmdef)} behind {import.ScriptsDefine}, " +
                           $"missing packages [{string.Join(", ", import.MissingPackages)}]");
-                bool imported = import.FilesCopied > 0 && asmdef != "none" && AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(target) != null;
+                Debug.Log($"[Game Spelunker] Import materials: {import.Materials?.Summary ?? "not repaired"}");
+                bool imported = import.FilesCopied > 0 && asmdef != "none" && AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(target) != null
+                                && !AssetDatabase.IsValidFolder(target + "/" + ExtractedProject.ToolsFolder); // the export's tools never come along
                 AssetDatabase.DeleteAsset("Assets/Spelunked");
 
-                bool ok = scripts.Count > 0 && imported;
+                bool ok = scripts.Count > 0 && imported && toolsCopied && again.ScriptsStopped == 0;
                 Debug.Log(ok ? "[Game Spelunker] Smoke test passed." : "[Game Spelunker] Smoke test FAILED: no scripts exported.");
                 EditorApplication.Exit(ok ? 0 : 1);
             }
             catch (Exception ex)
             {
                 Debug.LogException(ex is AggregateException ae && ae.InnerException != null ? ae.InnerException : ex);
+                EditorApplication.Exit(1);
+            }
+        }
+
+        /// <summary>Prepares an existing export for opening (-gsExport &lt;folder&gt;), as the window does after extracting, then exits.</summary>
+        public static void PrepareExport()
+        {
+            try
+            {
+                string export = Arg("-gsExport") ?? throw new ArgumentException("-gsExport is required");
+                var prepared = ExtractedProject.PrepareForOpening(export, ExtractedProject.ToolsSource());
+                Debug.Log($"[Game Spelunker] Prepared {export}: {prepared.ScriptsStopped} script(s) stopped in edit mode, " +
+                          $"{prepared.GeneratedRemoved} generated removed, tools installed: {prepared.ToolsInstalled}");
+                EditorApplication.Exit(0);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex);
                 EditorApplication.Exit(1);
             }
         }

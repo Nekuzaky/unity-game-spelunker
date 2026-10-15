@@ -29,6 +29,8 @@ Click **Extract**. The card shows:
 
 **Cancel** stops AssetRipper immediately; the output folder may then contain a partial export, which the next extraction replaces.
 
+After a **Unity project** extraction, Game Spelunker prepares the project for opening: game scripts only run in Play mode, code generated for the game's build is removed, and the materials are repaired the first time the project opens. The message under **Extract** says what was done — see **[Opening the Project](Opening-the-Project#what-game-spelunker-prepares-for-you)**.
+
 How long it takes depends on the game: a few seconds for a small game, several minutes and gigabytes of disk for a large one.
 
 ## What an export contains

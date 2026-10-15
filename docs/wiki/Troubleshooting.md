@@ -39,6 +39,9 @@ See **[Opening the Project](Opening-the-Project)** for Safe Mode, pink materials
 
 | Problem | Fix |
 | :--- | :--- |
+| **Unity crashes or floods the Console when opening an extraction made before 0.3** | The game's scripts ran in the editor. Click **Open in Unity** in Game Spelunker (it prepares the project first), or extract again. |
+| **Compile errors such as CS0122 in `__JobReflectionRegistrationOutput__…`** | Code generated for the game's build. Game Spelunker removes it; with an older extraction, delete the file. |
+| **Objects still grey or white after opening** | Right-click the materials' folder → **Game Spelunker → Repair Materials**. If a material is still wrong, its original shader was an effect driven by code: pick *Standard* or *Universal Render Pipeline/Lit* by hand. |
 | **"N file(s) skipped: their GUID is already used"** | Those assets already exist in your project (often because you imported the same game twice). Delete the older import first if you want a fresh copy. |
 | **Imported scripts don't compile after adding the define** | Expected for decompiled code: fix the errors, or remove the define to switch them off again. |
 | **"The target folder must be inside Assets/"** | Imports always go under `Assets/`. |

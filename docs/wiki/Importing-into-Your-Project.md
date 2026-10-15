@@ -31,6 +31,10 @@ Everything goes into its own folder, together with the original `.meta` files, s
 
 Folders named **Resources** inside the import are renamed `Resources (imported)`: Unity puts every `Resources` folder into your builds, and you don't want the game's assets in yours.
 
+## Materials repaired
+
+Since the game's shaders are not imported, its materials would show pink. Right after copying, Game Spelunker moves them to real shaders of your project's render pipeline: back on the stock Unity shader when the game used one, otherwise on *Standard*, *Universal Render Pipeline/Lit* or *HDRP/Lit* with their textures (color, normal, occlusion, emission), cut-out for foliage and transparency for glass. The import message says how many were repaired. The same repair is available on any folder: **right-click → Game Spelunker → Repair Materials**. See **[Opening the Project](Opening-the-Project)** for the details.
+
 ## GUID conflicts
 
 Every Unity asset has a unique identifier (GUID) in its `.meta` file. If an imported file has a GUID that already exists in your project, copying it would silently redirect references in **your** assets to the game's file. Game Spelunker skips those files and tells you how many were skipped.
@@ -42,6 +46,8 @@ Decompiled code rarely compiles as-is, and its class names may clash with yours.
 - they are only imported if you tick **Decompiled scripts**;
 - they go into one dedicated assembly, `Spelunked.<Game>`, separate from your code;
 - that assembly **only compiles when you add a scripting define**, shown in the window — for example `SPELUNKER_COMPILE_MY_GAME`.
+
+Imported scripts never run in edit mode either: `[ExecuteInEditMode]` and `[ExecuteAlways]` are removed, as in an extracted project.
 
 Until you add the define, the scripts are just text you can read, prefabs keep their references to them, and nothing can break. When you want to try compiling them, add the define in **Project Settings → Player → Other Settings → Scripting Define Symbols**, fix the errors that appear, or remove the define again.
 

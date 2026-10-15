@@ -18,6 +18,8 @@ namespace GameSpelunker
         /// <see cref="ProjectImporter.CompileDefine"/> is added, so they can never break the project.
         /// </summary>
         public bool IncludeScripts;
+        /// <summary>Moves imported materials off the shaders AssetRipper could not recover (see <see cref="MaterialRepair"/>).</summary>
+        public bool RepairMaterials = true;
     }
 
     public sealed class ImportResult
@@ -28,6 +30,7 @@ namespace GameSpelunker
         public string? ScriptsDefine;
         public List<string> SkippedFolders = new List<string>();
         public List<string> MissingPackages = new List<string>();
+        public MaterialRepairReport? Materials;
     }
 
     /// <summary>
@@ -84,6 +87,9 @@ namespace GameSpelunker
                     bool isScripts = name.Equals("Scripts", StringComparison.OrdinalIgnoreCase);
                     bool isScenes = name.Equals("Scenes", StringComparison.OrdinalIgnoreCase);
 
+                    // Game Spelunker's own tools, installed in the export: this project already has them.
+                    if (name.Equals(ExtractedProject.ToolsFolder, StringComparison.Ordinal))
+                        continue;
                     if (AlwaysSkipped.Contains(name) || (isScripts && !options.IncludeScripts) || (isScenes && !options.IncludeScenes))
                     {
                         result.SkippedFolders.Add(name);
@@ -100,6 +106,7 @@ namespace GameSpelunker
                 {
                     result.ScriptsDefine = CompileDefine(gameName);
                     WriteScriptsAssembly(Path.Combine(target, "Scripts"), gameName, result.ScriptsDefine);
+                    ExtractedProject.StopEditModeExecution(Path.Combine(target, "Scripts"));
                 }
             }
             finally
@@ -109,7 +116,25 @@ namespace GameSpelunker
 
             result.MissingPackages = MissingPackages(exportFolder);
             AssetDatabase.Refresh();
+            if (options.RepairMaterials && copied.Count > 0)
+                result.Materials = MaterialRepair.Run(result.TargetFolder, ShaderNames(Path.Combine(source, "Shader")));
             return result;
+        }
+
+        /// <summary>Shader names by guid, read from the export: the import leaves shaders out, materials still name them.</summary>
+        private static Dictionary<string, string> ShaderNames(string shaderFolder)
+        {
+            var names = new Dictionary<string, string>();
+            if (!Directory.Exists(shaderFolder))
+                return names;
+            foreach (var shader in Directory.GetFiles(shaderFolder, "*.shader"))
+            {
+                string? guid = File.Exists(shader + ".meta") ? ReadGuid(shader + ".meta") : null;
+                var match = Regex.Match(File.ReadAllText(shader), "^\\s*Shader\\s+\"([^\"]+)\"", RegexOptions.Multiline);
+                if (guid != null && match.Success)
+                    names[guid] = match.Groups[1].Value;
+            }
+            return names;
         }
 
         private static string Rename(string folderName) =>

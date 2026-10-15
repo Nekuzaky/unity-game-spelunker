@@ -384,6 +384,7 @@ namespace GameSpelunker
             if (Directory.Exists(assets))
             {
                 var types = Directory.GetDirectories(assets)
+                    .Where(d => Path.GetFileName(d) != ExtractedProject.ToolsFolder)
                     .Select(d => (name: Path.GetFileName(d), count: Directory.GetFiles(d, "*", SearchOption.AllDirectories).Count(f => !f.EndsWith(".meta", StringComparison.Ordinal))))
                     .Where(t => t.count > 0)
                     .OrderByDescending(t => t.count)
@@ -476,6 +477,8 @@ namespace GameSpelunker
                     lines.Add("Not imported: " + string.Join(", ", result.SkippedFolders) + ".");
                 if (result.ScriptsDefine != null)
                     lines.Add($"Scripts are not compiled until you add the define {result.ScriptsDefine}.");
+                if (result.Materials != null)
+                    lines.Add(result.Materials.Summary);
                 if (result.MissingPackages.Count > 0)
                     lines.Add("The game used packages this project does not have: " + string.Join(", ", result.MissingPackages) +
                               ". Add them with the Package Manager if some assets look broken.");
@@ -646,6 +649,7 @@ namespace GameSpelunker
             string output = _output;
             var mode = _mode;
             string? installed = AssetRipperInstaller.Executable; // EditorPrefs: read here, not in the task
+            string tools = ExtractedProject.ToolsSource();       // Package Manager API: main thread too
             bool download = installed == null;
             _busy = true;
             _busyText = download ? DownloadText : "Starting AssetRipper…";
@@ -696,7 +700,15 @@ namespace GameSpelunker
                     RunOnMain(() => _busyText = "Exporting…");
                     await session.ExportAsync(output, mode, token).ConfigureAwait(false);
                     var seconds = (DateTime.Now - started).TotalSeconds;
-                    RunOnMain(() => _message = $"Extracted in {seconds:0} s to {output}.");
+                    string done = $"Extracted in {seconds:0} s to {output}.";
+                    if (mode == ExportMode.UnityProject)
+                    {
+                        var prepared = ExtractedProject.PrepareForOpening(output, tools);
+                        done += $" Ready to open: {prepared.ScriptsStopped} script(s) set to run in Play mode only" +
+                                (prepared.GeneratedRemoved > 0 ? $", {prepared.GeneratedRemoved} build-generated file(s) removed" : "") +
+                                ", materials repaired on first open.";
+                    }
+                    RunOnMain(() => _message = done);
                 }
                 catch (Exception ex) when (token.IsCancellationRequested && (ex is OperationCanceledException || ex is ObjectDisposedException || ex is System.Net.Http.HttpRequestException))
                 {
