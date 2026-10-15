@@ -116,7 +116,7 @@ namespace GameSpelunker
                     session.ExportAsync(output, ExportMode.UnityProject, CancellationToken.None).Wait();
                 }
                 var prepared = ExtractedProject.PrepareForOpening(output, ExtractedProject.ToolsSource(), report.DataFolder);
-                Debug.Log($"[Game Spelunker] Prepared: {prepared.NativeLibrariesAdded} native libraries, {prepared.ScriptsFixed} scripts fixed, {prepared.LibrariesSwitchedOff} libraries behind the define, {prepared.UnreadableRemoved} unreadable assets removed, " +
+                Debug.Log($"[Game Spelunker] Prepared: {prepared.NativeLibrariesAdded} native libraries, {prepared.ScriptsFixed} scripts fixed, {prepared.ShadersRestored} UI shaders restored, {prepared.LibrariesSwitchedOff} libraries behind the define, {prepared.UnreadableRemoved} unreadable assets removed, " +
                           $"{prepared.ObsoleteComponentsRemoved} obsolete components removed");
                 string editor = ExtractedProject.EditorFor(output, EditorApplication.applicationPath);
                 Debug.Log($"[Game Spelunker] Target editor: {editor}; same version as the game: {prepared.SameVersionAsGame}, APIs migrated: {prepared.MigratesApis}");

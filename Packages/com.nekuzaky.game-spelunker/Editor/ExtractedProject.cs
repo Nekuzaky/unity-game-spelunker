@@ -33,6 +33,7 @@ namespace GameSpelunker
         public int ScriptsFixed;
         public int NativeLibrariesAdded;
         public int LibrariesRestored;
+        public int ShadersRestored;
         public bool SameVersionAsGame;
         public bool HasGameCode;
         public bool MigratesApis;
@@ -251,6 +252,7 @@ namespace GameSpelunker
 
             result.SpawnedObjects = SpawnScanner.Scan(assets);
             result.CursorTextures = ImportCursorTextures(assets, scripts);
+            result.ShadersRestored = ShaderRestorer.Restore(assets);
 
             if (Directory.Exists(scripts))
             {

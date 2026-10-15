@@ -31,6 +31,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **Settings.** Extractions folder, check-after-extract, end-of-extraction notification and the number of code fix
   passes, in a foldout at the bottom of the window.
 - Extracted projects open on the game's biggest scene the first time, with the camera over the terrain.
+- **Interface shaders come back.** The NGUI and text shaders AssetRipper leaves empty (`Unlit/Transparent Colored`,
+  `Unlit/Text`, their clipped `1/2/3` and `TextureClip` variants, premultiplied, masked, packed, `GUI/… Text`) are
+  regenerated under the same name, so menus and HUD text render: The Forest's title menu shows all its text again.
 - IL2CPP games load from the game folder (so `GameAssembly.dll` is found) and the build report explains exactly what
   comes back from such a build.
 
