@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ## [Unreleased]
 
 ### Added
+- **The game's code is made to compile.** After the import, Game Spelunker compiles the decompiled code in the
+  background (with the game code switched on), and repeats until it compiles: members the decompiler could not rebuild
+  are stubbed (same signature, a warning or a NotImplementedException inside), and files that cannot be stubbed are
+  set aside behind `SPELUNKER_QUARANTINED`. The list is written to `AuxiliaryFiles/GameSpelunker-code-fixes.txt`.
+  On The Forest: 9 members stubbed and 12 TerrainComposer tool files set aside, out of 4,733 files.
+- Decompiled code is rewritten for APIs Unity removed or renamed: legacy particles, GUIText/GUITexture/GUILayer,
+  MovieTexture, ProceduralMaterial, legacy networking (NetworkView, RPC, Network), UnityEngine.VR, PhysicMaterial,
+  removed platforms, `new Material(string)`, `Graphics.DrawProceduralIndirect`, `Application.isWebPlayer`, removed
+  TextureFormat members, and decompiler-generated event backing fields. Replacements live in
+  `Assets/Plugins/GameSpelunker/LegacyApi.cs`, compiled only with the game code.
+- C# and UnityScript code of the game are compiled as separate assemblies, as the game did.
+- The game's native libraries (FMOD, Steam, VR…) are copied into `Assets/Plugins/Native`.
 - **Previews of objects spawned by game code.** Scenes are scanned for markers whose `High` / `Mid` / `Low` / `LOD0`…
   fields point to prefabs (how The Forest places its 8,940 trees), and the extracted project shows those objects at
   their world position when a scene opens. Never saved into the scene, hidden in Play mode, toggled from

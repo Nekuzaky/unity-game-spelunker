@@ -696,7 +696,7 @@ namespace GameSpelunker
                     {
                         session.Dispose();
                         RunOnMain(() => { _progress = 0; _busyText = "Preparing the project…"; });
-                        var prepared = ExtractedProject.PrepareForOpening(output, tools);
+                        var prepared = ExtractedProject.PrepareForOpening(output, tools, report.DataFolder);
                         string gameCode = prepared.GameCodeOff
                             ? " The game's decompiled code is switched off so the project always compiles (Tools → Game Spelunker → Enable Game Code in that project)."
                             : "";
@@ -710,6 +710,15 @@ namespace GameSpelunker
                             }));
                             string summary = await ExtractedProject.ImportAndRepairAsync(output, editor, importProgress, token).ConfigureAwait(false);
                             done += " Imported into Unity and repaired, ready to open: " + summary + gameCode;
+                            if (prepared.GameCodeOff)
+                            {
+                                var compileProgress = new Progress<string>(m => RunOnMain(() => { _progress = 0.99f; _busyText = m; }));
+                                var code = await GameCodeCompiler.MakeItCompileAsync(output, editor, compileProgress, token).ConfigureAwait(false);
+                                done += code.Compiles
+                                    ? $" The game's code compiles once enabled ({code.MembersStubbed} member(s) that could not be decompiled were stubbed, " +
+                                      $"{code.FilesQuarantined} file(s) set aside; see AuxiliaryFiles/GameSpelunker-code-fixes.txt)."
+                                    : $" The game's code still has {code.RemainingErrors} compile error(s) once enabled (see AuxiliaryFiles/GameSpelunker-code-fixes.txt).";
+                            }
                         }
                         else
                         {

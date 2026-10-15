@@ -30,6 +30,8 @@ namespace GameSpelunker
         public int ObsoleteComponentsRemoved;
         public int SpawnedObjects;
         public int CursorTextures;
+        public int ScriptsFixed;
+        public int NativeLibrariesAdded;
         public bool ToolsInstalled;
     }
 
@@ -108,12 +110,25 @@ namespace GameSpelunker
             return Path.Combine(root, "Editor");
         }
 
-        public static PrepareResult PrepareForOpening(string exportFolder, string toolsSource)
+        public static PrepareResult PrepareForOpening(string exportFolder, string toolsSource, string? gameDataFolder = null)
         {
             var result = new PrepareResult();
             string assets = Path.Combine(ProjectFolder(exportFolder), "Assets");
             if (!Directory.Exists(assets))
                 return result;
+
+            string gameNote = Path.Combine(exportFolder, "AuxiliaryFiles", "GameSpelunker-game.txt");
+            if (gameDataFolder != null)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(gameNote)!);
+                File.WriteAllText(gameNote, gameDataFolder);
+            }
+            else if (File.Exists(gameNote))
+            {
+                gameDataFolder = File.ReadAllText(gameNote).Trim();
+            }
+            if (gameDataFolder != null && Directory.Exists(gameDataFolder))
+                result.NativeLibrariesAdded = CopyNativeLibraries(gameDataFolder, Path.Combine(assets, "Plugins", "Native"));
 
             string scripts = Path.Combine(assets, "Scripts");
             string plugins = Path.Combine(assets, "Plugins");
@@ -143,11 +158,29 @@ namespace GameSpelunker
                 }
             }
 
-            bool firstPass = HasScripts(plugins);
-            if (firstPass)
-                WriteGameCodeAssembly(Path.Combine(plugins, GameCodeFirstPass + ".asmdef"), GameCodeFirstPass, null);
+            string compat = Path.Combine(plugins, ToolsFolder);
+            Directory.CreateDirectory(compat);
+            File.Copy(Path.Combine(toolsSource, "ExtractedProjectTools~", "LegacyApi.cs"), Path.Combine(compat, "LegacyApi.cs"), true);
+            result.ScriptsFixed = FixDecompiledCode(scripts) + FixDecompiledCode(plugins);
+
+            var firstPassRefs = new List<string> { GameCodeFirstPass };
+            WriteGameCodeAssembly(Path.Combine(plugins, GameCodeFirstPass + ".asmdef"), GameCodeFirstPass, new string[0]);
+            foreach (var folder in LaterAssemblyFolders(plugins))
+            {
+                string name = "Spelunked." + Path.GetFileName(folder);
+                WriteGameCodeAssembly(Path.Combine(folder, name + ".asmdef"), name, new[] { GameCodeFirstPass });
+                firstPassRefs.Add(name);
+            }
+            bool firstPass = true;
             if (HasScripts(scripts))
-                WriteGameCodeAssembly(Path.Combine(scripts, GameCode + ".asmdef"), GameCode, firstPass ? GameCodeFirstPass : null);
+            {
+                WriteGameCodeAssembly(Path.Combine(scripts, GameCode + ".asmdef"), GameCode, firstPassRefs.ToArray());
+                foreach (var folder in LaterAssemblyFolders(scripts))
+                {
+                    string name = "Spelunked." + Path.GetFileName(folder);
+                    WriteGameCodeAssembly(Path.Combine(folder, name + ".asmdef"), name, firstPassRefs.Concat(new[] { GameCode }).ToArray());
+                }
+            }
             foreach (var dll in Directory.GetFiles(assets, "*.dll", SearchOption.AllDirectories))
                 if (ConstrainLibrary(dll))
                     result.LibrariesSwitchedOff++;
@@ -203,9 +236,14 @@ namespace GameSpelunker
         private static bool HasScripts(string folder) =>
             Directory.Exists(folder) && Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories).Any();
 
-        private static void WriteGameCodeAssembly(string path, string name, string? reference)
+        private static IEnumerable<string> LaterAssemblyFolders(string root) =>
+            Directory.Exists(root)
+                ? Directory.GetDirectories(root).Where(d => Regex.IsMatch(Path.GetFileName(d), "^Assembly-(UnityScript|Boo)", RegexOptions.IgnoreCase) && HasScripts(d))
+                : Enumerable.Empty<string>();
+
+        private static void WriteGameCodeAssembly(string path, string name, string[] referenced)
         {
-            string references = reference != null ? $"\"{reference}\"" : "";
+            string references = string.Join(", ", referenced.Select(r => $"\"{r}\""));
             File.WriteAllText(path,
                 "{\n" +
                 $"    \"name\": \"{name}\",\n" +
@@ -213,6 +251,47 @@ namespace GameSpelunker
                 "    \"allowUnsafeCode\": true,\n" +
                 $"    \"defineConstraints\": [\"{GameCodeDefine}\"]\n" +
                 "}\n");
+        }
+
+        private static int CopyNativeLibraries(string dataFolder, string target)
+        {
+            string plugins = Path.Combine(dataFolder, "Plugins");
+            if (!Directory.Exists(plugins))
+                return 0;
+            var libraries = Directory.GetFiles(plugins, "*.dll", SearchOption.AllDirectories)
+                .Where(f => !Regex.IsMatch(Path.GetFileName(f), "^lib_burst_generated", RegexOptions.IgnoreCase))
+                .Where(f => !Regex.IsMatch(f.Replace('\\', '/'), "/x86/", RegexOptions.IgnoreCase))
+                .ToList();
+            int copied = 0;
+            foreach (var library in libraries)
+            {
+                string destination = Path.Combine(target, Path.GetFileName(library));
+                if (File.Exists(destination))
+                    continue;
+                if (IsManagedAssembly(library))
+                    continue;
+                Directory.CreateDirectory(target);
+                File.Copy(library, destination);
+                File.WriteAllText(destination + ".meta",
+                    "fileFormatVersion: 2\nguid: " + Guid.NewGuid().ToString("N") + "\nPluginImporter:\n  serializedVersion: 2\n  isPreloaded: 0\n" +
+                    "  isOverridable: 0\n  platformData:\n  - first:\n      Any:\n    second:\n      enabled: 0\n      settings: {}\n" +
+                    "  - first:\n      Editor: Editor\n    second:\n      enabled: 1\n      settings:\n        CPU: x86_64\n        OS: Windows\n" +
+                    "  - first:\n      Standalone: Win64\n    second:\n      enabled: 1\n      settings:\n        CPU: x86_64\n" +
+                    "  userData:\n  assetBundleName:\n  assetBundleVariant:\n");
+                copied++;
+            }
+            return copied;
+        }
+
+        private static bool IsManagedAssembly(string dll)
+        {
+            try
+            {
+                System.Reflection.AssemblyName.GetAssemblyName(dll);
+                return true;
+            }
+            catch (BadImageFormatException) { return false; }
+            catch (IOException) { return false; }
         }
 
         private static bool ConstrainLibrary(string dll)
@@ -339,6 +418,76 @@ namespace GameSpelunker
             }
             File.WriteAllText(file, string.Join(newline, kept));
             return removed.Count;
+        }
+
+        private static readonly string[] RemovedPlatforms =
+        {
+            "OSXDashboardPlayer", "OSXWebPlayer", "WindowsWebPlayer", "FlashPlayer", "NaCl", "BlackBerryPlayer", "TizenPlayer", "SamsungTVPlayer",
+            "WiiU", "XBOX360", "PS3", "PSP2", "PSM", "WP8Player", "MetroPlayerX86", "MetroPlayerX64", "MetroPlayerARM", "LinuxEditor",
+        };
+
+        private static readonly Regex BackingField = new Regex(@"\b(\w+)__BackingField\s*;", RegexOptions.Compiled);
+
+        private static string RenameType(string code, string original, string name, string replacement)
+        {
+            if (Regex.IsMatch(original, @"\b(?:class|struct|enum|interface)\s+" + name + @"\b"))
+                return code;
+            return Regex.Replace(code, @"(?<![\w\.:])(?:global::)?(?:UnityEngine\.)?" + name + @"\b(?!\s*=[^=>])", replacement);
+        }
+
+        public static int FixDecompiledCode(string folder)
+        {
+            if (!Directory.Exists(folder))
+                return 0;
+            int changed = 0;
+            foreach (var file in Directory.GetFiles(folder, "*.cs", SearchOption.AllDirectories))
+            {
+                if (file.Replace('\\', '/').Contains("/" + ToolsFolder + "/"))
+                    continue;
+                string text = File.ReadAllText(file);
+                string updated = text;
+
+                foreach (Match field in BackingField.Matches(text))
+                {
+                    string name = field.Groups[1].Value;
+                    if (Regex.IsMatch(text, @"\bevent\s+[\w<>\.,\s]+\s" + Regex.Escape(name) + @"\b"))
+                        updated = Regex.Replace(updated, @"\bthis\." + Regex.Escape(name) + @"\b(?!__)", "this." + name + "__BackingField");
+                }
+
+                for (int i = 0; i < RemovedPlatforms.Length; i++)
+                    updated = Regex.Replace(updated, @"\bRuntimePlatform\." + RemovedPlatforms[i] + @"\b", "((RuntimePlatform)(" + (-1000 - i) + "))");
+
+                updated = RenameType(updated, text, "PhysicMaterial", "PhysicsMaterial");
+                updated = RenameType(updated, text, "PhysicMaterialCombine", "PhysicsMaterialCombine");
+                foreach (var removed in new[] { "MovieTexture", "GUIText", "GUITexture", "GUIElement", "GUILayer", "ProceduralMaterial" })
+                    updated = RenameType(updated, text, removed, "global::GameSpelunker." + removed + "Stub");
+                updated = Regex.Replace(updated, @"(?<![\w\.])Random(\s+\w+\s*=\s*new\s+)Random\s*\(", "System.Random$1System.Random(");
+                updated = Regex.Replace(updated, @"\b(?:UnityEngine\.)?Application\.isWebPlayer\b", "false");
+                updated = Regex.Replace(updated, @"\b(?:UnityEngine\.)?Application\.CaptureScreenshot\s*\(", "UnityEngine.ScreenCapture.CaptureScreenshot(");
+                updated = Regex.Replace(updated, @"\.impactForceSum\b", ".impulse");
+                updated = Regex.Replace(updated, @"\bTextureFormat\.ASTC_RGBA?_(\d+x\d+)\b", "TextureFormat.ASTC_$1");
+                updated = Regex.Replace(updated, @"\bTextureFormat\.(ATC_RGB4|ATC_RGBA8|PVRTC_2BPP_RGB|PVRTC_2BPP_RGBA|PVRTC_4BPP_RGB|PVRTC_4BPP_RGBA)\b", "((TextureFormat)(-2000))");
+                updated = Regex.Replace(updated, @"(?m)^(\s*)[\w\.\[\]\(\)]+\.(useConeFriction|sleepVelocity|sleepAngularVelocity)\s*=\s*[^;]+;", "$1;");
+                updated = Regex.Replace(updated, @"\bnew\s+(?:UnityEngine\.)?Material\s*\(", "global::GameSpelunker.Compat.NewMaterial(");
+                updated = Regex.Replace(updated, @"\b(?:UnityEngine\.)?Graphics\.DrawProceduralIndirect\s*\(", "global::GameSpelunker.Compat.DrawProceduralIndirect(");
+
+                foreach (var shortcut in new[] { "particleEmitter:ParticleEmitter", "particleAnimator:ParticleAnimator", "particleRenderer:ParticleRenderer",
+                             "guiText:GUIText", "guiTexture:GUITexture" })
+                {
+                    if (text.Contains("ComponentAction<"))
+                        break;
+                    var parts = shortcut.Split(':');
+                    if (Regex.IsMatch(text, @"\b[\w<>\[\]\.]+\s+" + parts[0] + @"\s*(?:[;={]|=>)"))
+                        continue;
+                    updated = Regex.Replace(updated, @"\.(" + parts[0] + @")\b(?!\s*\()", ".GetComponent<" + parts[1] + ">()");
+                }
+
+                if (updated == text)
+                    continue;
+                File.WriteAllText(file, updated);
+                changed++;
+            }
+            return changed;
         }
 
         public static int StopEditModeExecution(string folder)

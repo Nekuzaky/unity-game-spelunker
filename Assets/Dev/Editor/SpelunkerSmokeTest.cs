@@ -55,14 +55,18 @@ namespace GameSpelunker
                 var project = ExtractedProject.ProjectFolder(output);
                 Debug.Log($"[Game Spelunker] Project folder: {project}, version {ExtractedProject.UnityVersionOf(output)}");
 
-                var prepared = ExtractedProject.PrepareForOpening(output, ExtractedProject.ToolsSource());
+                var prepared = ExtractedProject.PrepareForOpening(output, ExtractedProject.ToolsSource(), report.DataFolder);
                 var again = ExtractedProject.PrepareForOpening(output, ExtractedProject.ToolsSource());
                 string ready = ExtractedProject.ImportAndRepairAsync(output, ExtractedProject.EditorFor(output, EditorApplication.applicationPath), null, CancellationToken.None)
                     .GetAwaiter().GetResult();
                 Debug.Log($"[Game Spelunker] Import and repair in Unity: {ready}");
+                var code = GameCodeCompiler.MakeItCompileAsync(output, ExtractedProject.EditorFor(output, EditorApplication.applicationPath), null, CancellationToken.None)
+                    .GetAwaiter().GetResult();
+                Debug.Log($"[Game Spelunker] Game code compiles: {code.Compiles} after {code.Rounds} pass(es)");
                 bool toolsCopied = File.Exists(Path.Combine(project, "Assets", "GameSpelunker", "Editor", "MaterialRepair.cs"))
                                    && File.Exists(Path.Combine(project, "Assets", "GameSpelunker", "Editor", "ExtractedProjectSetup.cs"));
                 toolsCopied &= prepared.GameCodeOff && File.Exists(Path.Combine(project, "Assets", "Scripts", "Spelunked.GameCode.asmdef"));
+                toolsCopied &= code.Compiles;
                 Debug.Log($"[Game Spelunker] Prepared: {prepared.ScriptsStopped} script(s) stopped in edit mode, {prepared.GeneratedRemoved} generated removed, " +
                           $"game code off: {prepared.GameCodeOff}, {prepared.AssemblyInfoRemoved} AssemblyInfo removed, {prepared.LibrariesAdded} libraries added, " +
                           $"tools {(toolsCopied ? "installed" : "MISSING")}, second pass changed {again.ScriptsStopped}");
@@ -111,13 +115,18 @@ namespace GameSpelunker
                     session.LoadAsync(report.DataFolder, CancellationToken.None).Wait();
                     session.ExportAsync(output, ExportMode.UnityProject, CancellationToken.None).Wait();
                 }
-                var prepared = ExtractedProject.PrepareForOpening(output, ExtractedProject.ToolsSource());
-                Debug.Log($"[Game Spelunker] Prepared: {prepared.LibrariesSwitchedOff} libraries behind the define, {prepared.UnreadableRemoved} unreadable assets removed, " +
+                var prepared = ExtractedProject.PrepareForOpening(output, ExtractedProject.ToolsSource(), report.DataFolder);
+                Debug.Log($"[Game Spelunker] Prepared: {prepared.NativeLibrariesAdded} native libraries, {prepared.ScriptsFixed} scripts fixed, {prepared.LibrariesSwitchedOff} libraries behind the define, {prepared.UnreadableRemoved} unreadable assets removed, " +
                           $"{prepared.ObsoleteComponentsRemoved} obsolete components removed");
                 var importStarted = DateTime.UtcNow;
                 string ready = ExtractedProject.ImportAndRepairAsync(output, ExtractedProject.EditorFor(output, EditorApplication.applicationPath), null, CancellationToken.None)
                     .GetAwaiter().GetResult();
                 Debug.Log($"[Game Spelunker] Imported and repaired in {(DateTime.UtcNow - importStarted).TotalMinutes:0.0} min: {ready}");
+                var compileStarted = DateTime.UtcNow;
+                var code = GameCodeCompiler.MakeItCompileAsync(output, ExtractedProject.EditorFor(output, EditorApplication.applicationPath), null, CancellationToken.None)
+                    .GetAwaiter().GetResult();
+                Debug.Log($"[Game Spelunker] Game code compiles: {code.Compiles} in {(DateTime.UtcNow - compileStarted).TotalMinutes:0.0} min, {code.Rounds} pass(es), " +
+                          $"{code.MembersStubbed} stubbed, {code.FilesQuarantined} quarantined, {code.RemainingErrors} error(s) left");
                 Debug.Log($"[Game Spelunker] Extracted {report.Name} (Unity {report.UnityVersion}) in {(DateTime.UtcNow - started).TotalMinutes:0.0} min; " +
                           $"{prepared.ScriptsStopped} script(s) stopped in edit mode, {prepared.GeneratedRemoved} generated removed");
                 EditorApplication.Exit(0);
@@ -125,6 +134,41 @@ namespace GameSpelunker
             catch (Exception ex)
             {
                 Debug.LogException(ex is AggregateException ae && ae.InnerException != null ? ae.InnerException : ex);
+                EditorApplication.Exit(1);
+            }
+        }
+
+        public static void CompileGameCode()
+        {
+            try
+            {
+                string export = Arg("-gsExport") ?? throw new ArgumentException("-gsExport is required");
+                var result = GameCodeCompiler.MakeItCompileAsync(export, EditorApplication.applicationPath,
+                    new Progress<string>(m => Debug.Log("[Game Spelunker] " + m)), CancellationToken.None).GetAwaiter().GetResult();
+                Debug.Log($"[Game Spelunker] Game code compiles: {result.Compiles} after {result.Rounds} pass(es), {result.MembersStubbed} member(s) stubbed, " +
+                          $"{result.FilesQuarantined} file(s) quarantined, {result.RemainingErrors} error(s) in the last pass");
+                EditorApplication.Exit(result.Compiles ? 0 : 2);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex);
+                EditorApplication.Exit(1);
+            }
+        }
+
+        public static void FixCode()
+        {
+            try
+            {
+                string project = Arg("-gsProject") ?? throw new ArgumentException("-gsProject is required");
+                int scripts = ExtractedProject.FixDecompiledCode(Path.Combine(project, "Assets", "Scripts"));
+                int plugins = ExtractedProject.FixDecompiledCode(Path.Combine(project, "Assets", "Plugins"));
+                Debug.Log($"[Game Spelunker] Decompiled code fixed: {scripts} script(s), {plugins} plugin script(s)");
+                EditorApplication.Exit(0);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex);
                 EditorApplication.Exit(1);
             }
         }
