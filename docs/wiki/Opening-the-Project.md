@@ -46,6 +46,7 @@ What the preparation does:
 | What you see | Why, and what to do |
 | :--- | :--- |
 | **A long import** | Unity imports every texture, model and sound of the game. Large games take several minutes. |
+| **"The referenced script (Unknown) on this Behaviour is missing!" in Play mode** | The game's code is switched off: every game component has no script to run. Game Spelunker asks before entering Play mode in that state; enable the game code to try it. |
 | **Nothing happens in Play mode** | The game's code is switched off (see above). Even with it on, an extracted game rarely plays like the original: shaders, services (Steam, online), and code that was generated at build time are missing. Use Play mode to inspect objects, not to play. |
 | **"Enter Safe Mode?"** | Only after **Enable Game Code**: the decompiled code has compile errors. Choose **Ignore** to keep exploring, or **Enter Safe Mode** to fix the scripts. **Disable Game Code** brings the project back to a clean state. |
 | **No scene is open** | Open one from `Assets/Scenes` (or search `t:Scene` in the Project window). |

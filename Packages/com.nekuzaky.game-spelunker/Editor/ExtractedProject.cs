@@ -29,6 +29,7 @@ namespace GameSpelunker
         public int UnreadableRemoved;
         public int ObsoleteComponentsRemoved;
         public int SpawnedObjects;
+        public int CursorTextures;
         public bool ToolsInstalled;
     }
 
@@ -166,6 +167,7 @@ namespace GameSpelunker
                 result.ObsoleteComponentsRemoved += RemoveObsoleteComponents(file);
 
             result.SpawnedObjects = SpawnScanner.Scan(assets);
+            result.CursorTextures = ImportCursorTextures(assets, scripts);
 
             if (Directory.Exists(scripts))
             {
@@ -241,6 +243,58 @@ namespace GameSpelunker
             }
             File.WriteAllText(meta, text);
             return true;
+        }
+
+        private static readonly Regex SetCursorCall = new Regex(@"Cursor\.SetCursor\(\s*(?:this\.)?(?:\w+\.)*(\w+)\s*,", RegexOptions.Compiled);
+        private static readonly string[] TextureExtensions = { ".png", ".tga", ".jpg", ".jpeg", ".psd", ".tif", ".tiff", ".bmp", ".exr", ".hdr" };
+
+        private static int ImportCursorTextures(string assets, string scripts)
+        {
+            if (!Directory.Exists(scripts))
+                return 0;
+            var fields = new HashSet<string>();
+            foreach (var file in Directory.EnumerateFiles(scripts, "*.cs", SearchOption.AllDirectories))
+            {
+                string text = File.ReadAllText(file);
+                if (text.IndexOf("Cursor.SetCursor", StringComparison.Ordinal) < 0)
+                    continue;
+                foreach (Match call in SetCursorCall.Matches(text))
+                    if (call.Groups[1].Value != "null")
+                        fields.Add(call.Groups[1].Value);
+            }
+            if (fields.Count == 0)
+                return 0;
+
+            var reference = new Regex(@"^\s+(?:" + string.Join("|", fields.Select(Regex.Escape)) + @"): \{fileID: 2800000, guid: ([0-9a-f]{32}), type: 3\}",
+                RegexOptions.Multiline);
+            var guids = new HashSet<string>();
+            foreach (var file in Directory.EnumerateFiles(assets, "*.*", SearchOption.AllDirectories)
+                         .Where(f => f.EndsWith(".unity", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)
+                                     || f.EndsWith(".asset", StringComparison.OrdinalIgnoreCase)))
+            {
+                string text = File.ReadAllText(file);
+                foreach (Match match in reference.Matches(text))
+                    guids.Add(match.Groups[1].Value);
+            }
+            if (guids.Count == 0)
+                return 0;
+
+            int changed = 0;
+            foreach (var meta in Directory.EnumerateFiles(assets, "*.meta", SearchOption.AllDirectories)
+                         .Where(m => TextureExtensions.Any(e => m.EndsWith(e + ".meta", StringComparison.OrdinalIgnoreCase))))
+            {
+                string text = File.ReadAllText(meta);
+                var guid = Regex.Match(text, @"^guid: (\w+)", RegexOptions.Multiline);
+                if (!guid.Success || !guids.Contains(guid.Groups[1].Value))
+                    continue;
+                string updated = Regex.Replace(text, @"^  textureType: \d+", "  textureType: 7", RegexOptions.Multiline);
+                updated = Regex.Replace(updated, @"^  isReadable: \d+", "  isReadable: 1", RegexOptions.Multiline);
+                if (updated == text)
+                    continue;
+                File.WriteAllText(meta, updated);
+                changed++;
+            }
+            return changed;
         }
 
         private static bool IsUnreadableShaderProgram(string asset)

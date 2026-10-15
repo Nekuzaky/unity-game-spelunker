@@ -13,6 +13,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - The repair reads how the original shader described each property: a texture is only reused as specular,
   metallic, normal, occlusion or emission map when its description says so (a "Detail Mask (G) Noise (B) Occlusion
   (A)" map is not a specular map), and a `_Color` described as a "Color Variation" is not used as a tint.
+- Textures the game passes to `Cursor.SetCursor` (found from the decompiled calls and the fields they use) are
+  imported as Cursor textures, so they no longer fail with "not CPU accessible".
+- Pressing Play while the game's code is switched off asks first: Play mode runs none of it and every game component
+  reports a missing script. Cancel, play anyway, or enable the game code.
 - Rebuilt materials no longer inherit textures that happen to sit in Standard's own slots (detail, parallax…), bark
   and trunks are never cut out (their alpha is often gloss), and the tint's alpha no longer cuts out opaque surfaces.
 - **Projects delivered ready.** After extracting a Unity project, Game Spelunker opens it in Unity in the background

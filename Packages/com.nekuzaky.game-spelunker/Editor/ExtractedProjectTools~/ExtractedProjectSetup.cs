@@ -22,6 +22,25 @@ namespace GameSpelunker
         {
             if (!File.Exists(Marker))
                 EditorApplication.delayCall += RepairOnce;
+            if (!Application.isBatchMode)
+                EditorApplication.playModeStateChanged += WarnBeforePlay;
+        }
+
+        private static void WarnBeforePlay(PlayModeStateChange change)
+        {
+            if (change != PlayModeStateChange.ExitingEditMode || GameCodeEnabled())
+                return;
+            int choice = EditorUtility.DisplayDialogComplex("Game Spelunker",
+                "The game's code is switched off in this project, so Play mode runs none of it: every game component reports " +
+                "\"The referenced script (Unknown) on this Behaviour is missing!\" and nothing moves.\n\n" +
+                "Enable the game code to try it (decompiled code often needs fixes before it compiles), or play anyway to look " +
+                "at the scene at runtime.",
+                "Cancel", "Play anyway", "Enable Game Code");
+            if (choice == 1)
+                return;
+            EditorApplication.isPlaying = false;
+            if (choice == 2)
+                SetGameCode(true);
         }
 
         private static void RepairOnce()
