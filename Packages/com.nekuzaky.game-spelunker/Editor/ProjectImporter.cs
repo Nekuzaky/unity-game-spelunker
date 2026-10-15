@@ -105,6 +105,8 @@ namespace GameSpelunker
             }
 
             result.MissingPackages = MissingPackages(exportFolder);
+            ShaderRestorer.Restore(Path.Combine(Path.GetDirectoryName(Application.dataPath)!, result.TargetFolder),
+                BuiltinShaders.Catalog(Application.unityVersion));
             AssetDatabase.Refresh();
             if (options.RepairMaterials && copied.Count > 0)
                 result.Materials = MaterialRepair.Run(result.TargetFolder, ShaderNames(Path.Combine(source, "Shader")));

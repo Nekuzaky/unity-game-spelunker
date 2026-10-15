@@ -22,16 +22,27 @@ Any other non-empty folder is refused.
 
 ## Running the extraction
 
-Click **Extract**. The card shows:
+Click **Extract**. The card shows every stage with its state, the time it took and an estimate of the time left:
 
-- a progress bar for the AssetRipper download (first extraction only), the **loading** step (AssetRipper reads every file of the game) and the **exporting** step (it writes the project);
-- **AssetRipper log**, a foldout with AssetRipper's latest output lines — useful when something goes wrong.
+1. **Download AssetRipper** — first extraction only.
+2. **Export with AssetRipper** — it reads every file of the game and writes the project.
+3. **Prepare the project** — see **[Opening the Project](Opening-the-Project#what-game-spelunker-prepares-for-you)**.
+4. **Make the game's code compile** — the fix loop, quick compiler first, Unity confirming.
+5. **Import and repair in Unity** — every asset imported and the materials repaired in the background.
+6. **Check in Play mode** — a background Play run with screenshots and an error count (on by default, Settings turns it off).
 
-**Cancel** stops AssetRipper immediately; the output folder may then contain a partial export, which the next extraction replaces.
+A notification (sound and taskbar) fires when it ends. **Add to queue** lines up more games; each one starts as soon as the previous extraction finishes. The **AssetRipper log** foldout shows AssetRipper's latest output lines, useful when something goes wrong.
 
-After a **Unity project** extraction, Game Spelunker prepares the project for opening: game scripts only run in Play mode, code generated for the game's build is removed, and the materials are repaired the first time the project opens. The message under **Extract** says what was done — see **[Opening the Project](Opening-the-Project#what-game-spelunker-prepares-for-you)**.
+**Cancel** stops the current stage immediately; the output folder may then contain a partial export, which the next extraction replaces.
 
-How long it takes depends on the game: a few seconds for a small game, several minutes and gigabytes of disk for a large one.
+How long it takes depends on the game: a few minutes for a small game, up to an hour and several gigabytes of disk for a large one.
+
+## Shaders and game code fidelity
+
+Two Settings control how much of the original build is kept:
+
+- **Keep the game's compiled shaders** (on by default) — when the game's exact Unity version is installed, the shaders stay as compiled in the build and custom materials render exactly as in the game. Without that version, shaders become placeholders that Game Spelunker repairs: Unity's own shaders are restored from Unity's official source for that version, interface and text shaders are regenerated, and the remaining materials are rebuilt on Standard.
+- **Game code** — *Decompiled C#* gives readable, editable source (the default). *Original assemblies* keeps the game's compiled DLLs: no decompilation errors and identical behaviour in Play mode, but nothing to read.
 
 ## What an export contains
 

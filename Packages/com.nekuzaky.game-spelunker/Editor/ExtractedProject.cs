@@ -34,6 +34,10 @@ namespace GameSpelunker
         public int NativeLibrariesAdded;
         public int LibrariesRestored;
         public int ShadersRestored;
+        public string? SteamAppId;
+        public List<string> ThirdParty = new List<string>();
+        public int LightingDataRemoved;
+        public bool DecompiledPipelineDropped;
         public bool SameVersionAsGame;
         public bool HasGameCode;
         public bool MigratesApis;
@@ -56,6 +60,20 @@ namespace GameSpelunker
             if (!File.Exists(file)) return null;
             var m = Regex.Match(File.ReadAllText(file), @"m_EditorVersion:\s*(\S+)");
             return m.Success ? m.Groups[1].Value : null;
+        }
+
+        public static string? GameVersionOf(string exportFolder)
+        {
+            string note = Path.Combine(exportFolder, "AuxiliaryFiles", "GameSpelunker-version.txt");
+            if (File.Exists(note))
+            {
+                string saved = File.ReadAllText(note).Trim();
+                if (saved.Length > 0) return saved;
+            }
+            string? version = UnityVersionOf(exportFolder);
+            if (version != null && Directory.Exists(Path.GetDirectoryName(note)))
+                File.WriteAllText(note, version + "\n");
+            return version;
         }
 
         public static List<ExtractedScript> FindScripts(string exportFolder)
@@ -140,7 +158,8 @@ namespace GameSpelunker
         public static PrepareResult PrepareForOpening(string exportFolder, string toolsSource, string? gameDataFolder = null)
         {
             var result = new PrepareResult();
-            string assets = Path.Combine(ProjectFolder(exportFolder), "Assets");
+            string project = ProjectFolder(exportFolder);
+            string assets = Path.Combine(project, "Assets");
             if (!Directory.Exists(assets))
                 return result;
 
@@ -155,7 +174,25 @@ namespace GameSpelunker
                 gameDataFolder = File.ReadAllText(gameNote).Trim();
             }
             if (gameDataFolder != null && Directory.Exists(gameDataFolder))
+            {
                 result.NativeLibrariesAdded = CopyNativeLibraries(gameDataFolder, Path.Combine(assets, "Plugins", "Native"));
+                string gameFolder = Path.GetDirectoryName(gameDataFolder.TrimEnd('\\', '/'))!;
+                string appIdFile = Path.Combine(project, "steam_appid.txt");
+                if (!File.Exists(appIdFile))
+                {
+                    string? appId = null;
+                    string shipped = Path.Combine(gameFolder, "steam_appid.txt");
+                    if (File.Exists(shipped))
+                        appId = File.ReadAllText(shipped).Trim();
+                    if (string.IsNullOrEmpty(appId) && Directory.GetFiles(gameFolder, "steam_api*.dll").Length + Directory.GetFiles(gameDataFolder, "steam_api*.dll", SearchOption.AllDirectories).Length > 0)
+                        appId = GameFinder.SteamAppId(gameFolder);
+                    if (!string.IsNullOrEmpty(appId) && Regex.IsMatch(appId, @"^\d+$"))
+                    {
+                        File.WriteAllText(appIdFile, appId + "\n");
+                        result.SteamAppId = appId;
+                    }
+                }
+            }
 
             string scripts = Path.Combine(assets, "Scripts");
             string plugins = Path.Combine(assets, "Plugins");
@@ -169,7 +206,7 @@ namespace GameSpelunker
                     result.AssemblyInfoRemoved++;
                 }
 
-            string? gameVersion = UnityVersionOf(exportFolder);
+            string? gameVersion = GameVersionOf(exportFolder);
             result.SameVersionAsGame = FindEditor(gameVersion) != null;
             var providedByEditor = result.SameVersionAsGame && !IsAtLeast(gameVersion, 2018, 2) ? EditorScriptingLibraries : new string[0];
             foreach (var name in providedByEditor)
@@ -230,10 +267,11 @@ namespace GameSpelunker
                         WriteGameCodeAssembly(Path.Combine(folder, name + ".asmdef"), name, firstPassRefs.Concat(new[] { GameCode }).ToArray());
                     }
                 }
-                foreach (var dll in Directory.GetFiles(assets, "*.dll", SearchOption.AllDirectories))
-                    if (ConstrainLibrary(dll))
-                        result.LibrariesSwitchedOff++;
-                result.GameCodeOff = true;
+                if (result.HasGameCode)
+                    foreach (var dll in Directory.GetFiles(assets, "*.dll", SearchOption.AllDirectories))
+                        if (ConstrainLibrary(dll))
+                            result.LibrariesSwitchedOff++;
+                result.GameCodeOff = result.HasGameCode;
             }
 
             foreach (var asset in Directory.GetFiles(assets, "*.asset", SearchOption.AllDirectories))
@@ -252,7 +290,18 @@ namespace GameSpelunker
 
             result.SpawnedObjects = SpawnScanner.Scan(assets);
             result.CursorTextures = ImportCursorTextures(assets, scripts);
-            result.ShadersRestored = ShaderRestorer.Restore(assets);
+            result.ThirdParty = DetectThirdParty(exportFolder, assets);
+            result.DecompiledPipelineDropped = DropDecompiledRenderPipeline(project, assets);
+            if (result.MigratesApis)
+                result.LightingDataRemoved = RemoveIncompatibleLightingData(assets);
+
+            string? shaderVersion = result.SameVersionAsGame ? gameVersion : UnityEngine.Application.unityVersion;
+            try
+            {
+                BuiltinShaders.EnsureDownloadedAsync(shaderVersion, CancellationToken.None).GetAwaiter().GetResult();
+            }
+            catch (Exception ex) when (ex is OperationCanceledException || ex is AggregateException) { }
+            result.ShadersRestored = ShaderRestorer.Restore(assets, BuiltinShaders.Catalog(shaderVersion));
 
             if (Directory.Exists(scripts))
             {
@@ -287,6 +336,138 @@ namespace GameSpelunker
         private const string GameCode = "Spelunked.GameCode";
         private const string GameCodeFirstPass = "Spelunked.GameCode.FirstPass";
 
+        private static readonly (string pattern, string name, string where)[] KnownPlugins =
+        {
+            ("Rewired_Core", "Rewired (input)", "guavaman.com/rewired"),
+            ("PlayMaker", "PlayMaker (visual scripting)", "hutonggames.com"),
+            ("DOTween", "DOTween (tweening)", "dotween.demigiant.com"),
+            ("bolt.dll", "Photon Bolt (networking)", "photonengine.com"),
+            ("Photon3Unity3D", "Photon Unity Networking", "photonengine.com"),
+            ("Mirror", "Mirror (networking)", "mirror-networking.com"),
+            ("Pathfinding.", "A* Pathfinding Project", "arongranberg.com/astar"),
+            ("fmodstudio", "FMOD Studio (its sound banks are in StreamingAssets)", "fmod.com"),
+            ("AkSoundEngine", "Wwise (its sound banks are in StreamingAssets)", "audiokinetic.com"),
+            ("CSteamworks", "Steamworks.NET", "steamworks.github.io"),
+            ("Facepunch.Steamworks", "Facepunch.Steamworks", "wiki.facepunch.com/steamworks"),
+            ("Newtonsoft.Json", "Json.NET", "newtonsoft.com/json"),
+            ("Sisus.", "Sisus tools (Power Inspector…)", "Asset Store"),
+            ("FbxExporters", "FBX Exporter", "Unity package"),
+            ("NGUI", "NGUI (interface)", "Asset Store"),
+            ("TextMeshPro", "TextMesh Pro", "Unity package com.unity.textmeshpro"),
+            ("Cinemachine", "Cinemachine", "Unity package com.unity.cinemachine"),
+            ("Unity.Postprocessing", "Post Processing", "Unity package com.unity.postprocessing"),
+            ("Unity.InputSystem", "Input System", "Unity package com.unity.inputsystem"),
+            ("Unity.Addressables", "Addressables", "Unity package com.unity.addressables"),
+            ("Unity.Timeline", "Timeline", "Unity package com.unity.timeline"),
+        };
+
+        private static List<string> DetectThirdParty(string exportFolder, string assets)
+        {
+            var found = new List<string>();
+            var names = Directory.GetFiles(assets, "*.dll", SearchOption.AllDirectories).Select(Path.GetFileName)
+                .Concat(Directory.Exists(Path.Combine(assets, "Scripts")) ? Directory.GetDirectories(Path.Combine(assets, "Scripts")).Select(d => Path.GetFileName(d) + ".dll") : Enumerable.Empty<string>())
+                .ToList();
+            var lines = new List<string>();
+            foreach (var (pattern, name, where) in KnownPlugins)
+                if (names.Any(n => n!.StartsWith(pattern, StringComparison.OrdinalIgnoreCase) || n!.Contains(pattern)))
+                {
+                    found.Add(name);
+                    lines.Add(name + " — " + where);
+                }
+            string file = Path.Combine(exportFolder, "AuxiliaryFiles", "GameSpelunker-plugins.txt");
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            if (lines.Count > 0)
+                File.WriteAllText(file, "Plugins and middleware recognised in this game. Their files are in the project; the licence to use them " +
+                                        "in your own work comes from their authors.\n" + string.Join("\n", lines) + "\n");
+            else if (File.Exists(file))
+                File.Delete(file);
+            return found;
+        }
+
+        private static readonly Regex PipelineReference = new Regex(@"(m_CustomRenderPipeline|customRenderPipeline): \{fileID: \d+, guid: (\w+), type: \d+\}", RegexOptions.Compiled);
+
+        private static bool DropDecompiledRenderPipeline(string project, string assets)
+        {
+            string settings = Path.Combine(project, "ProjectSettings");
+            var files = new[] { "GraphicsSettings.asset", "QualitySettings.asset" }.Select(f => Path.Combine(settings, f)).Where(File.Exists).ToList();
+            var guids = files.SelectMany(f => PipelineReference.Matches(File.ReadAllText(f)).Cast<Match>().Select(m => m.Groups[2].Value)).Distinct().ToList();
+            if (guids.Count == 0)
+                return false;
+            var decompiled = new HashSet<string>();
+            foreach (var meta in Directory.EnumerateFiles(assets, "*.asset.meta", SearchOption.AllDirectories))
+            {
+                string text = File.ReadAllText(meta);
+                string? guid = guids.FirstOrDefault(g => text.Contains("guid: " + g));
+                if (guid == null)
+                    continue;
+                string asset = meta.Substring(0, meta.Length - 5);
+                var script = Regex.Match(File.Exists(asset) ? File.ReadAllText(asset) : "", @"m_Script: \{fileID: -?\d+, guid: (\w+)");
+                if (script.Success && IsProjectScript(assets, script.Groups[1].Value))
+                    decompiled.Add(guid);
+            }
+            if (decompiled.Count == 0)
+                return false;
+            foreach (var file in files)
+            {
+                string text = File.ReadAllText(file);
+                string cleaned = PipelineReference.Replace(text, m => decompiled.Contains(m.Groups[2].Value) ? m.Groups[1].Value + ": {fileID: 0}" : m.Value);
+                if (cleaned != text)
+                    File.WriteAllText(file, cleaned);
+            }
+            return true;
+        }
+
+        private static bool IsProjectScript(string assets, string guid)
+        {
+            foreach (var meta in Directory.EnumerateFiles(assets, "*.meta", SearchOption.AllDirectories)
+                         .Where(m => m.EndsWith(".cs.meta", StringComparison.OrdinalIgnoreCase) || m.EndsWith(".dll.meta", StringComparison.OrdinalIgnoreCase)))
+                if (File.ReadAllText(meta).Contains("guid: " + guid))
+                    return true;
+            return false;
+        }
+
+        private static int RemoveIncompatibleLightingData(string assets)
+        {
+            int removed = 0;
+            foreach (var asset in Directory.GetFiles(assets, "*.asset", SearchOption.AllDirectories))
+            {
+                bool lightingData = false;
+                try
+                {
+                    using var reader = new StreamReader(asset);
+                    for (int i = 0; i < 6 && !lightingData; i++)
+                    {
+                        string? line = reader.ReadLine();
+                        if (line == null) break;
+                        lightingData = line.StartsWith("LightingDataAsset:", StringComparison.Ordinal) || line.StartsWith("  LightingDataAsset:", StringComparison.Ordinal)
+                                       || line.StartsWith("--- !u!1120 ", StringComparison.Ordinal);
+                    }
+                }
+                catch (IOException) { continue; }
+                if (!lightingData)
+                    continue;
+                string? guid = null;
+                if (File.Exists(asset + ".meta"))
+                {
+                    var match = Regex.Match(File.ReadAllText(asset + ".meta"), @"^guid: (\w+)", RegexOptions.Multiline);
+                    if (match.Success) guid = match.Groups[1].Value;
+                }
+                File.Delete(asset);
+                if (File.Exists(asset + ".meta")) File.Delete(asset + ".meta");
+                removed++;
+                if (guid == null)
+                    continue;
+                foreach (var scene in Directory.GetFiles(assets, "*.unity", SearchOption.AllDirectories))
+                {
+                    string text = File.ReadAllText(scene);
+                    string cleaned = Regex.Replace(text, @"m_LightingDataAsset: \{fileID: \d+, guid: " + guid + @", type: \d+\}", "m_LightingDataAsset: {fileID: 0}");
+                    if (!ReferenceEquals(cleaned, text) && cleaned != text)
+                        File.WriteAllText(scene, cleaned);
+                }
+            }
+            return removed;
+        }
+
         private static int RestoreOriginalLibraries(string assets, string managed)
         {
             if (!Directory.Exists(managed))
@@ -296,7 +477,7 @@ namespace GameSpelunker
             {
                 string name = Path.GetFileName(dll);
                 string original = Path.Combine(managed, name);
-                if (!File.Exists(original) || NeverCopied.Any(p => name.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+                if (!File.Exists(original) || EngineLibraries.Any(p => name.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
                     continue;
                 var bytes = File.ReadAllBytes(original);
                 if (bytes.AsSpan().SequenceEqual(File.ReadAllBytes(dll)))
@@ -307,7 +488,9 @@ namespace GameSpelunker
             return restored;
         }
 
-        private static readonly string[] EditorScriptingLibraries ={ "Boo.Lang.dll", "UnityScript.Lang.dll" };
+        private static readonly string[] EngineLibraries = { "UnityEngine", "Unity.", "System", "Mono.", "mscorlib", "netstandard", "Microsoft." };
+
+        private static readonly string[] EditorScriptingLibraries = { "Boo.Lang.dll", "UnityScript.Lang.dll" };
 
         private static readonly string[] NeverCopied ={ "UnityEngine", "Unity.", "System", "Mono.", "mscorlib", "netstandard", "Microsoft.", "Assembly-" };
 
@@ -617,6 +800,12 @@ namespace GameSpelunker
                 changed++;
             }
             return changed;
+        }
+
+        public static ExportSettings RecommendedSettings(BuildReport report)
+        {
+            bool sameEditor = FindEditor(report.UnityVersion) != null;
+            return new ExportSettings { KeepCompiledShaders = sameEditor, OriginalAssemblies = false };
         }
 
         public static string EditorFor(string exportFolder, string fallback) => FindEditor(UnityVersionOf(exportFolder)) ?? fallback;

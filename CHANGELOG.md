@@ -31,6 +31,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **Settings.** Extractions folder, check-after-extract, end-of-extraction notification and the number of code fix
   passes, in a foldout at the bottom of the window.
 - Extracted projects open on the game's biggest scene the first time, with the camera over the terrain.
+- **Unity's own shaders come back as real source.** For every placeholder that hides one of Unity's built-in shaders,
+  Game Spelunker downloads Unity's official shader source for the right editor version (a 300 KB archive, cached per
+  version) and restores the original code under the same name. Imports into your own project are restored the same way.
+- **The game's compiled shaders can be kept.** When the game's exact Unity version is installed, extraction keeps the
+  shaders as compiled in the build instead of placeholders, so custom materials render exactly as in the game
+  (Settings → "Keep the game's compiled shaders"). Game code can also be kept as the original assemblies instead of
+  decompiled C# ("runs exactly like the game", no source to read).
+- **A render probe catches shaders that need the game running.** Kept game shaders are drawn off-screen once per
+  material during the repair; those that draw nothing without the game's code (wind-driven trees, code-driven skies,
+  oceans) are repaired like placeholders, the rest keep the game's real look. On The Forest the terrain, rocks and
+  grass keep the game's own shaders and 373 tree and sky materials fall back to the repair.
+- A render pipeline that only exists in the build as decompiled or rewritten code (a URP asset whose script lives in
+  the project, not in a package) is removed from Graphics and Quality settings, so the project renders with the
+  built-in pipeline and its materials are repaired instead of staying untouched.
+- **The code fix loop got a quick compiler.** Before each background Unity pass, the game's code is compiled with the
+  editor's own C# compiler directly (seconds instead of minutes per pass, same assembly layout and defines); Unity
+  then only confirms the result. A safety valve falls back to the Unity-only loop when the quick compiler disagrees.
+- **Play mode acts like the real game.** `steam_appid.txt` is written into extracted projects of Steam games, so
+  Steamworks initialises in Play mode instead of failing or closing the game.
+- **Known plugins and middleware are recognised** (Rewired, PlayMaker, DOTween, FMOD, Wwise, Photon, A* Pathfinding,
+  NGUI, TextMesh Pro, Cinemachine…) and listed in the Explore card and `AuxiliaryFiles/GameSpelunker-plugins.txt`,
+  with where each one comes from.
+- Baked lighting data that cannot survive a Unity version change is removed (and scenes unlinked from it), so
+  upgraded projects stop logging "LightingData asset is incompatible".
 - **Interface shaders come back.** The NGUI and text shaders AssetRipper leaves empty (`Unlit/Transparent Colored`,
   `Unlit/Text`, their clipped `1/2/3` and `TextureClip` variants, premultiplied, masked, packed, `GUI/… Text`) are
   regenerated under the same name, so menus and HUD text render: The Forest's title menu shows all its text again.
@@ -44,6 +68,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   (duplicate assemblies…), and renames decompiled members that share their type's name instead of quarantining the
   file and everything that uses it.
 - A failed compile loop leaves the game code switched off instead of half on.
+- The game code define is written in the format of the project's Unity version (`1:` before 2021.2, `Standalone:`
+  after); older projects silently dropped it, so their game code was never compiled and every component reported a
+  missing script in Play mode.
+- The game's Unity version is remembered at extraction (`AuxiliaryFiles/GameSpelunker-version.txt`), so preparing a
+  project again after Unity upgraded it still migrates the APIs it needs.
+- The quick compiler only fixes errors decompilation causes; a type it cannot resolve is left to Unity instead of
+  setting the file aside.
 - **The game's code is made to compile.** After the import, Game Spelunker compiles the decompiled code in the
   background (with the game code switched on), and repeats until it compiles: members the decompiler could not rebuild
   are stubbed (same signature, a warning or a NotImplementedException inside), and files that cannot be stubbed are

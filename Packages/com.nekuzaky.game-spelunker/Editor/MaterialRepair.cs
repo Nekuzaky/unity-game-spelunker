@@ -22,6 +22,7 @@ namespace GameSpelunker
         public int Skipped;
         public int ShadersRenamed;
         public int GraphicsShadersReset;
+        public int SilentShaders;
         public string LitShader = "";
 
         public string Summary
@@ -34,7 +35,8 @@ namespace GameSpelunker
                 return string.Format("{0} material(s) repaired: {1} back on their original Unity shader, {2} rebuilt on {3}, " +
                                      "{4} terrain, {5} particle, {6} sky. {7} left as they are (effects driven by code, UI, text).",
                     total, Restored, Rebuilt, LitShader, Terrain, Particles, Skies, Skipped) +
-                       (GraphicsShadersReset > 0 ? string.Format(" {0} rendering shader(s) of the graphics settings set back to Unity's own.", GraphicsShadersReset) : "");
+                       (GraphicsShadersReset > 0 ? string.Format(" {0} rendering shader(s) of the graphics settings set back to Unity's own.", GraphicsShadersReset) : "") +
+                       (SilentShaders > 0 ? string.Format(" {0} of them used a game shader that draws nothing without the game's code running.", SilentShaders) : "");
             }
         }
     }
@@ -256,6 +258,11 @@ namespace GameSpelunker
                         if (shaderGuid == null || shaderNamesByGuid == null || !shaderNamesByGuid.TryGetValue(shaderGuid, out original))
                             original = "";
                     }
+                    else if (shaderGuid != null && IsCompiledGameShader(shaderGuid) && DrawsNothing(material))
+                    {
+                        original = material.shader.name;
+                        report.SilentShaders++;
+                    }
                     else
                     {
                         int queue = material.renderQueue;
@@ -301,6 +308,75 @@ namespace GameSpelunker
             report.GraphicsShadersReset = ResetGraphicsShaders(placeholders);
             AssetDatabase.SaveAssets();
             return report;
+        }
+
+        private static readonly Dictionary<string, bool> compiledShaders = new Dictionary<string, bool>();
+        private static Mesh probeMesh;
+        private static Texture2D probeReadback;
+
+        private static bool IsCompiledGameShader(string guid)
+        {
+            bool compiled;
+            if (compiledShaders.TryGetValue(guid, out compiled))
+                return compiled;
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            compiled = path.StartsWith("Assets/", StringComparison.Ordinal) && path.EndsWith(".asset", StringComparison.OrdinalIgnoreCase)
+                       && AssetDatabase.GetMainAssetTypeAtPath(path) == typeof(Shader);
+            compiledShaders[guid] = compiled;
+            return compiled;
+        }
+
+        private static bool DrawsNothing(Material material)
+        {
+            if (probeMesh == null)
+            {
+                probeMesh = new Mesh();
+                probeMesh.hideFlags = HideFlags.HideAndDontSave;
+                probeMesh.vertices = new[] { new Vector3(-0.8f, -0.8f, 0), new Vector3(-0.8f, 0.8f, 0), new Vector3(0.8f, 0.8f, 0), new Vector3(0.8f, -0.8f, 0) };
+                probeMesh.uv = new[] { new Vector2(0, 0), new Vector2(0, 1), new Vector2(1, 1), new Vector2(1, 0) };
+                probeMesh.normals = new[] { Vector3.back, Vector3.back, Vector3.back, Vector3.back };
+                probeMesh.tangents = new[] { new Vector4(1, 0, 0, 1), new Vector4(1, 0, 0, 1), new Vector4(1, 0, 0, 1), new Vector4(1, 0, 0, 1) };
+                probeMesh.colors = new[] { Color.white, Color.white, Color.white, Color.white };
+                probeMesh.triangles = new[] { 0, 1, 2, 0, 2, 3, 0, 2, 1, 0, 3, 2 };
+                probeReadback = new Texture2D(32, 32, TextureFormat.RGBA32, false);
+                probeReadback.hideFlags = HideFlags.HideAndDontSave;
+            }
+            var clear = new Color(1f, 0f, 1f, 0f);
+            var target = RenderTexture.GetTemporary(32, 32, 24, RenderTextureFormat.ARGB32);
+            var previous = RenderTexture.active;
+            var ambient = RenderSettings.ambientLight;
+            RenderSettings.ambientLight = Color.white;
+            bool drew = false;
+            try
+            {
+                for (int pass = 0; pass < material.passCount && !drew; pass++)
+                {
+                    RenderTexture.active = target;
+                    GL.Clear(true, true, clear);
+                    GL.PushMatrix();
+                    GL.LoadProjectionMatrix(Matrix4x4.Ortho(-1, 1, -1, 1, -10, 10));
+                    GL.modelview = Matrix4x4.TRS(new Vector3(0, 0, -1), Quaternion.identity, Vector3.one);
+                    if (material.SetPass(pass))
+                        Graphics.DrawMeshNow(probeMesh, Matrix4x4.identity);
+                    GL.PopMatrix();
+                    probeReadback.ReadPixels(new Rect(0, 0, 32, 32), 0, 0, false);
+                    int visible = 0;
+                    foreach (var c in probeReadback.GetPixels32())
+                    {
+                        bool untouched = c.r > 240 && c.g < 15 && c.b > 240;
+                        bool black = c.r < 6 && c.g < 6 && c.b < 6;
+                        if (!untouched && !black) visible++;
+                    }
+                    drew = visible > 32 * 32 / 20;
+                }
+            }
+            finally
+            {
+                RenderSettings.ambientLight = ambient;
+                RenderTexture.active = previous;
+                RenderTexture.ReleaseTemporary(target);
+            }
+            return !drew;
         }
 
         private static int ResetGraphicsShaders(Dictionary<string, string> placeholders)

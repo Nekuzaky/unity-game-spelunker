@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -11,7 +12,7 @@ namespace GameSpelunker
 
         private static readonly Regex NamePattern = new Regex("^\\s*Shader\\s+\"([^\"]+)\"", RegexOptions.Compiled);
 
-        public static int Restore(string assetsFolder)
+        public static int Restore(string assetsFolder, Dictionary<string, string>? builtins = null)
         {
             if (!Directory.Exists(assetsFolder))
                 return 0;
@@ -28,13 +29,55 @@ namespace GameSpelunker
                 var name = NamePattern.Match(text);
                 if (!name.Success)
                     continue;
-                string? generated = Generate(name.Groups[1].Value);
-                if (generated == null)
+                string? replacement = builtins != null && builtins.TryGetValue(name.Groups[1].Value, out var original) ? original : Generate(name.Groups[1].Value);
+                if (replacement == null)
                     continue;
-                File.WriteAllText(file, generated);
+                File.WriteAllText(file, replacement);
+                restored++;
+            }
+            foreach (var file in Directory.EnumerateFiles(assetsFolder, "*.asset", SearchOption.AllDirectories).ToList())
+            {
+                string? name = CompiledShaderName(file);
+                if (name == null)
+                    continue;
+                string? replacement = builtins != null && builtins.TryGetValue(name, out var original) ? original : Generate(name);
+                if (replacement == null)
+                    continue;
+                string meta = file + ".meta";
+                var guid = File.Exists(meta) ? Regex.Match(File.ReadAllText(meta), @"^guid: (\w+)", RegexOptions.Multiline) : Match.Empty;
+                if (!guid.Success)
+                    continue;
+                string source = Path.ChangeExtension(file, ".shader");
+                if (File.Exists(source))
+                    continue;
+                File.WriteAllText(source, replacement);
+                File.WriteAllText(source + ".meta", "fileFormatVersion: 2\nguid: " + guid.Groups[1].Value + "\nShaderImporter:\n  defaultTextures: []\n  userData:\n  assetBundleName:\n  assetBundleVariant:\n");
+                File.Delete(file);
+                File.Delete(meta);
                 restored++;
             }
             return restored;
+        }
+
+        private static string? CompiledShaderName(string asset)
+        {
+            try
+            {
+                using var reader = new StreamReader(asset);
+                string? third = null;
+                for (int i = 0; i < 3; i++) third = reader.ReadLine();
+                if (third == null || !third.StartsWith("--- !u!48 ", StringComparison.Ordinal))
+                    return null;
+                for (int i = 0; i < 8; i++)
+                {
+                    string? line = reader.ReadLine();
+                    if (line == null) return null;
+                    var name = Regex.Match(line, @"^  m_Name: (.+)$");
+                    if (name.Success) return name.Groups[1].Value.Trim();
+                }
+            }
+            catch (IOException) { }
+            return null;
         }
 
         public static string? Generate(string name)

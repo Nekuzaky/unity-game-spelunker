@@ -112,6 +112,11 @@ namespace GameSpelunker
                         if (percent >= lastPercent + 10) { lastPercent = percent; Debug.Log($"[Game Spelunker] {phase} {percent}%"); }
                     };
                     session.StartAsync(CancellationToken.None).Wait();
+                    var exportSettings = ExtractedProject.RecommendedSettings(report);
+                    if (Arg("-gsShaders") is { } shaders) exportSettings.KeepCompiledShaders = shaders == "yaml";
+                    if (Arg("-gsScripts") is { } scripts) exportSettings.OriginalAssemblies = scripts == "dll";
+                    Debug.Log($"[Game Spelunker] Export settings: compiled shaders {exportSettings.KeepCompiledShaders}, original assemblies {exportSettings.OriginalAssemblies}");
+                    session.ConfigureAsync(exportSettings, CancellationToken.None).Wait();
                     session.LoadAsync(report.LoadPath, CancellationToken.None).Wait();
                     session.ExportAsync(output, ExportMode.UnityProject, CancellationToken.None).Wait();
                 }

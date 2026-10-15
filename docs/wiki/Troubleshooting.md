@@ -46,6 +46,22 @@ See **[Opening the Project](Opening-the-Project)** for Safe Mode, pink materials
 | **Imported scripts don't compile after adding the define** | Expected for decompiled code: fix the errors, or remove the define to switch them off again. |
 | **"The target folder must be inside Assets/"** | Imports always go under `Assets/`. |
 
+## The game's Unity version
+
+| Problem | Fix |
+| :--- | :--- |
+| **"This Unity version is not activated"** | Versions older than Unity 2020 use the old licence system. Click **Open Unity X to activate it**, sign in, choose a Personal licence, close that Unity, then **Done, check again**. |
+| **Install Unity X fails** | Unity Hub must be installed and signed in. Very old patch versions may not be in Unity's release list; install them by hand from the Unity download archive, Game Spelunker will find them. |
+| **The check or the import says the project is open in Unity** | Only one Unity can hold a project. Close the window that has it open, then try again. |
+
+## Checking the project
+
+| Problem | Fix |
+| :--- | :--- |
+| **"Play mode did not start"** | Open `AuxiliaryFiles/GameSpelunker-check.log`: the first scene may need another scene loaded first, or a service the editor cannot provide. |
+| **The screenshots are black** | Some games render only through their own cameras after a loading sequence longer than the check. Open the project and press Play yourself. |
+| **Errors counted in the check** | The most frequent ones are listed in the Health dashboard with **Copy report** to share them. Missing-script errors mean the game's code is off or did not fully compile. |
+
 ## Still stuck?
 
 Open an issue on **[GitHub](https://github.com/Nekuzaky/unity-game-spelunker/issues/new/choose)** with your Unity version, the game's Unity version and backend (from the build report) and the AssetRipper log. Please do not attach extracted files.

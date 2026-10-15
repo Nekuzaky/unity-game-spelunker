@@ -394,6 +394,13 @@ namespace GameSpelunker
                 card.Add(ActivationHint(version));
 
             card.Add(HealthSection());
+            string pluginsFile = Path.Combine(_output, "AuxiliaryFiles", "GameSpelunker-plugins.txt");
+            if (File.Exists(pluginsFile))
+            {
+                var plugins = File.ReadAllLines(pluginsFile).Where(l => l.Contains(" — ")).Select(l => l.Split(new[] { " — " }, StringSplitOptions.None)[0]).ToList();
+                if (plugins.Count > 0)
+                    card.Add(ChipRow("Plugins & middleware", plugins, "gs-chip--info", ""));
+            }
             card.Add(ImportSection(version));
 
             string assets = Path.Combine(ExtractedProject.ProjectFolder(_output), "Assets");
@@ -941,6 +948,11 @@ namespace GameSpelunker
             string thisEditor = EditorApplication.applicationPath;
             bool importInUnity = _importInUnity && mode == ExportMode.UnityProject;
             bool check = importInUnity && Settings.CheckAfterExtracting;
+            var exportSettings = new ExportSettings
+            {
+                KeepCompiledShaders = Settings.KeepCompiledShaders && ExtractedProject.FindEditor(report.UnityVersion) != null,
+                OriginalAssemblies = Settings.OriginalAssemblies,
+            };
             GameCodeCompiler.Passes = Settings.CompilePasses;
             bool download = installed == null;
             _busy = true;
@@ -998,6 +1010,7 @@ namespace GameSpelunker
                 try
                 {
                     await session.StartAsync(token).ConfigureAwait(false);
+                    await session.ConfigureAsync(exportSettings, token).ConfigureAwait(false);
                     RunOnMain(() => _busyText = "Loading game files…");
                     await session.LoadAsync(report.LoadPath, token).ConfigureAwait(false);
                     RunOnMain(() => _busyText = "Exporting…");

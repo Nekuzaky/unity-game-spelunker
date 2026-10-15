@@ -66,7 +66,7 @@ namespace GameSpelunker
             return null;
         }
 
-        private static string? SteamAppId(string gameFolder)
+        public static string? SteamAppId(string gameFolder)
         {
             string folder = gameFolder.TrimEnd('\\', '/');
             var common = Directory.GetParent(folder);

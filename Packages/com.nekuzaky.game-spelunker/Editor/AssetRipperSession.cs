@@ -16,6 +16,12 @@ namespace GameSpelunker
         PrimaryContent,
     }
 
+    public sealed class ExportSettings
+    {
+        public bool KeepCompiledShaders;
+        public bool OriginalAssemblies;
+    }
+
     public sealed class AssetRipperSession : IDisposable
     {
         private static readonly Regex ProgressPattern = new Regex(@"^(\w+Progress)\s*:\s*\((\d+)/(\d+)\)\s*(.*)$", RegexOptions.Compiled);
@@ -86,6 +92,32 @@ namespace GameSpelunker
             PostPath(mode == ExportMode.UnityProject ? "Export/UnityProject" : "Export/PrimaryContent", outputFolder, token);
 
         public Task ResetAsync(CancellationToken token) => PostPath("Reset", null, token);
+
+        public async Task ConfigureAsync(ExportSettings settings, CancellationToken token)
+        {
+            if (_http == null)
+                throw new InvalidOperationException("Call StartAsync first.");
+            var fields = new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("BundledAssetsExportMode", "DirectExport"),
+                new KeyValuePair<string, string>("ScriptContentLevel", "Level2"),
+                new KeyValuePair<string, string>("AudioExportFormat", "Default"),
+                new KeyValuePair<string, string>("ImageExportFormat", "Png"),
+                new KeyValuePair<string, string>("LightmapTextureExportFormat", "Yaml"),
+                new KeyValuePair<string, string>("SpriteExportMode", "Yaml"),
+                new KeyValuePair<string, string>("ShaderExportMode", settings.KeepCompiledShaders ? "Yaml" : "Dummy"),
+                new KeyValuePair<string, string>("TextExportMode", "Parse"),
+                new KeyValuePair<string, string>("ScriptLanguageVersion", "AutoSafe"),
+                new KeyValuePair<string, string>("ScriptExportMode", settings.OriginalAssemblies ? "DllExportWithoutRenaming" : "Hybrid"),
+                new KeyValuePair<string, string>("DefaultVersion", "0.0.0a0"),
+                new KeyValuePair<string, string>("TargetVersion", "0.0.0a0"),
+                new KeyValuePair<string, string>("PreferOriginalTextureExtension", ""),
+            };
+            using var content = new FormUrlEncodedContent(fields);
+            using var response = await _http.PostAsync("Settings/Update", content, token).ConfigureAwait(false);
+            if (response.StatusCode != HttpStatusCode.Redirect && response.StatusCode != HttpStatusCode.Found && !response.IsSuccessStatusCode)
+                throw new HttpRequestException($"AssetRipper /Settings/Update failed: {(int)response.StatusCode} {response.ReasonPhrase}");
+        }
 
         private async Task PostPath(string route, string? path, CancellationToken token)
         {

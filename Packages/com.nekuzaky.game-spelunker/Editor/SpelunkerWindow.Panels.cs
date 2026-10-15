@@ -49,8 +49,25 @@ namespace GameSpelunker
                 set => EditorPrefs.SetBool(NotifyKey, value);
             }
 
+            private const string ShadersKey = "GameSpelunker.KeepCompiledShaders";
+            private const string AssembliesKey = "GameSpelunker.OriginalAssemblies";
+
+            public static bool KeepCompiledShaders
+            {
+                get => EditorPrefs.GetBool(ShadersKey, true);
+                set => EditorPrefs.SetBool(ShadersKey, value);
+            }
+
+            public static bool OriginalAssemblies
+            {
+                get => EditorPrefs.GetBool(AssembliesKey, false);
+                set => EditorPrefs.SetBool(AssembliesKey, value);
+            }
+
             public static void Reset()
             {
+                EditorPrefs.DeleteKey(ShadersKey);
+                EditorPrefs.DeleteKey(AssembliesKey);
                 EditorPrefs.DeleteKey(OutputKey);
                 EditorPrefs.DeleteKey(CheckKey);
                 EditorPrefs.DeleteKey(PassesKey);
@@ -706,6 +723,19 @@ namespace GameSpelunker
                 string folder = EditorUtility.OpenFolderPanel("Where Game Spelunker puts extracted games", Settings.OutputRoot, "");
                 if (!string.IsNullOrEmpty(folder)) { Settings.OutputRoot = folder; Rebuild(); }
             }, icon: "d_FolderOpened Icon")));
+
+            var shaders = new Toggle("Keep the game's compiled shaders when its Unity version is installed") { value = Settings.KeepCompiledShaders };
+            shaders.tooltip = "The game's own shaders, as compiled in the build, render in the editor of the same Unity version. " +
+                              "Without that editor (or with this off) they are replaced by placeholders that Game Spelunker repairs.";
+            shaders.RegisterValueChangedCallback(e => Settings.KeepCompiledShaders = e.newValue);
+            card.Add(shaders);
+
+            var code = new PopupField<string>("Game code", new List<string> { "Decompiled C# (readable, editable)", "Original assemblies (runs exactly like the game)" },
+                Settings.OriginalAssemblies ? 1 : 0);
+            code.tooltip = "Decompiled C# lets you read and change the code. Original assemblies keep the game's compiled DLLs: no decompilation " +
+                           "errors and identical behaviour, best with the game's own Unity version, but no source to read.";
+            code.RegisterValueChangedCallback(e => Settings.OriginalAssemblies = e.newValue.StartsWith("Original", StringComparison.Ordinal));
+            card.Add(code);
 
             var check = new Toggle("Check the project in Play mode after extracting") { value = Settings.CheckAfterExtracting };
             check.tooltip = "Adds a few minutes: presses Play in the background, takes screenshots and counts errors.";
