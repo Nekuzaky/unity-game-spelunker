@@ -88,12 +88,34 @@ namespace GameSpelunker
         public static string? FindEditor(string? version)
         {
             if (version == null) return null;
-            foreach (var root in new[] { @"C:\Program Files\Unity\Hub\Editor", @"C:\Program Files\Unity\Editor" })
+            bool mac = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX);
+            foreach (var root in EditorRoots())
             {
-                string exe = Path.Combine(root, version, "Editor", "Unity.exe");
+                string exe = mac ? Path.Combine(root, version, "Unity.app", "Contents", "MacOS", "Unity") : Path.Combine(root, version, "Editor", "Unity.exe");
                 if (File.Exists(exe)) return exe;
             }
             return null;
+        }
+
+        private static IEnumerable<string> EditorRoots()
+        {
+            string hubConfig = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX)
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "UnityHub")
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "UnityHub");
+            string custom = Path.Combine(hubConfig, "secondaryInstallPath.json");
+            if (File.Exists(custom))
+            {
+                string path = File.ReadAllText(custom).Trim().Trim('"').Replace(@"\\", @"\");
+                if (path.Length > 0) yield return path;
+            }
+            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX))
+            {
+                yield return "/Applications/Unity/Hub/Editor";
+                yield break;
+            }
+            string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            yield return Path.Combine(programFiles, "Unity", "Hub", "Editor");
+            yield return Path.Combine(programFiles, "Unity", "Editor");
         }
 
         private static readonly Regex EditModeAttribute = new Regex(
@@ -251,6 +273,7 @@ namespace GameSpelunker
                     RegexOptions.Multiline));
             File.Copy(Path.Combine(toolsSource, "ExtractedProjectTools~", "ExtractedProjectSetup.cs"), Path.Combine(tools, "ExtractedProjectSetup.cs"), true);
             File.Copy(Path.Combine(toolsSource, "ExtractedProjectTools~", "SpawnPreview.cs"), Path.Combine(tools, "SpawnPreview.cs"), true);
+            File.Copy(Path.Combine(toolsSource, "ExtractedProjectTools~", "ProjectCheck.cs"), Path.Combine(tools, "ProjectCheck.cs"), true);
             if (assemblyDefinitions)
                 File.WriteAllText(Path.Combine(tools, "GameSpelunker.ExtractedTools.asmdef"),
                     "{\n    \"name\": \"GameSpelunker.ExtractedTools\",\n    \"includePlatforms\": [\"Editor\"],\n    \"autoReferenced\": false\n}\n");
@@ -336,15 +359,31 @@ namespace GameSpelunker
             return copied;
         }
 
-        private static bool IsManagedAssembly(string dll)
+        public static bool IsManagedAssembly(string dll)
         {
             try
             {
-                System.Reflection.AssemblyName.GetAssemblyName(dll);
-                return true;
+                using var reader = new BinaryReader(File.OpenRead(dll));
+                if (reader.BaseStream.Length < 0x40 || reader.ReadUInt16() != 0x5A4D)
+                    return false;
+                reader.BaseStream.Position = 0x3C;
+                long pe = reader.ReadInt32();
+                if (pe <= 0 || pe + 24 > reader.BaseStream.Length)
+                    return false;
+                reader.BaseStream.Position = pe;
+                if (reader.ReadUInt32() != 0x00004550)
+                    return false;
+                reader.BaseStream.Position = pe + 24;
+                ushort magic = reader.ReadUInt16();
+                long directories = pe + 24 + (magic == 0x20B ? 112 : 96);
+                long cli = directories + 14 * 8;
+                if (cli + 8 > reader.BaseStream.Length)
+                    return false;
+                reader.BaseStream.Position = cli;
+                return reader.ReadUInt32() != 0 && reader.ReadUInt32() != 0;
             }
-            catch (BadImageFormatException) { return false; }
             catch (IOException) { return false; }
+            catch (UnauthorizedAccessException) { return false; }
         }
 
         private static bool ConstrainLibrary(string dll)
@@ -619,9 +658,19 @@ namespace GameSpelunker
                 return ready.Groups[1].Value.Trim();
             if (text.Contains("another Unity instance is running with this project open") || text.Contains("It looks like another Unity instance"))
                 throw new InvalidOperationException("The project is already open in Unity. Close it and click Open in Unity: it repairs on first open.");
+            ThrowIfNotActivated(text, editor);
             if (text.Contains("Scripts have compiler errors"))
                 throw new InvalidOperationException("The project has compile errors, so Unity could not run the repair. See " + log);
             throw new InvalidOperationException($"Unity stopped before the repair (exit code {process.ExitCode}). See {log}");
+        }
+
+        public static void ThrowIfNotActivated(string log, string editor)
+        {
+            if (log.Contains("has not been activated with a valid License") || log.Contains("No valid Unity Editor license found")
+                || log.Contains("Failed to activate/update license"))
+                throw new InvalidOperationException("This Unity version is not activated, so it cannot run in the background. Open it once " +
+                                                    "(Game Spelunker window → Explore → Activate), sign in and choose a Personal license, close it, then try again. " +
+                                                    "Editor: " + editor);
         }
 
         private static int CountImports(string log, ref long position)
@@ -653,10 +702,15 @@ namespace GameSpelunker
             return reader.ReadToEnd();
         }
 
-        public static void OpenInUnity(string exportFolder)
+        public static void OpenInUnity(string exportFolder, string? scene = null)
         {
             PrepareForOpening(exportFolder, ToolsSource());
             string project = ProjectFolder(exportFolder);
+            if (scene != null)
+            {
+                Directory.CreateDirectory(Path.Combine(project, "Library"));
+                File.WriteAllText(Path.Combine(project, "Library", "GameSpelunker-open.txt"), scene);
+            }
             string editor = EditorFor(exportFolder, EditorApplication.applicationPath);
             Process.Start(new ProcessStartInfo(editor, $"-projectPath \"{project}\"") { UseShellExecute = false });
         }

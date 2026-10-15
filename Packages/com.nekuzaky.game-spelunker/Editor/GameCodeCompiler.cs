@@ -24,8 +24,10 @@ namespace GameSpelunker
     public static class GameCodeCompiler
     {
         public const string StubMessage = "Game Spelunker: this member did not compile after decompilation";
+        public static int Passes = 12;
+
         private static int MaxRounds =>
-            int.TryParse(Environment.GetEnvironmentVariable("GAME_SPELUNKER_COMPILE_PASSES"), out var passes) && passes > 0 ? passes : 12;
+            int.TryParse(Environment.GetEnvironmentVariable("GAME_SPELUNKER_COMPILE_PASSES"), out var passes) && passes > 0 ? passes : Math.Max(1, Passes);
         private static readonly Regex ErrorLine = new Regex(@"^(Assets[\\/][^(]+\.cs)\((\d+),\d+\): error (CS\d+)", RegexOptions.Compiled | RegexOptions.Multiline);
         private static readonly Regex Control = new Regex(@"^\s*(?:else\s+)?(?:if|for|foreach|while|switch|catch|using|lock|fixed|do|try|finally|else|checked|unchecked|unsafe)\b",
             RegexOptions.Compiled);
@@ -48,6 +50,7 @@ namespace GameSpelunker
                     result.Rounds = round;
                     progress?.Report($"Compiling the game's code (pass {round})…");
                     await RunUnityAsync(editor, project, log, token).ConfigureAwait(false);
+                    ExtractedProject.ThrowIfNotActivated(ReadShared(log), editor);
                     var errors = ReadErrors(log);
                     File.WriteAllLines(Path.Combine(Path.GetDirectoryName(log)!, $"GameSpelunker-compile-pass{round}.txt"),
                         ReadShared(log).Split('\n').Where(l => l.Contains("error CS")).Select(l => l.Trim()).Distinct());
@@ -93,7 +96,8 @@ namespace GameSpelunker
             }
             finally
             {
-                File.WriteAllText(settings, original);
+                bool switchable = Directory.EnumerateFiles(Path.Combine(project, "Assets"), "Spelunked.*.asmdef", SearchOption.AllDirectories).Any();
+                File.WriteAllText(settings, result.Compiles && switchable ? WithDefine(original, ExtractedProject.GameCodeDefine) : original);
                 result.Log = report.ToString();
                 File.WriteAllText(Path.Combine(exportFolder, "AuxiliaryFiles", "GameSpelunker-code-fixes.txt"),
                     $"Compiles: {result.Compiles} after {result.Rounds} pass(es); {result.MembersRenamed} member(s) renamed, {result.MembersStubbed} member(s) stubbed, " +

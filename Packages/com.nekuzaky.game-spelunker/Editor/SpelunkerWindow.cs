@@ -13,7 +13,7 @@ using UnityEngine.UIElements;
 
 namespace GameSpelunker
 {
-    public sealed class SpelunkerWindow : EditorWindow
+    public sealed partial class SpelunkerWindow : EditorWindow
     {
         public const string PackageRoot = "Packages/com.nekuzaky.game-spelunker";
         private const string StylePath = PackageRoot + "/Editor/Spelunker.uss";
@@ -45,6 +45,11 @@ namespace GameSpelunker
         private bool _importScripts;
         private bool _importInUnity = true;
         private string _importMessage = "";
+        private string _editorMessage = "";
+        private string _exploreMessage = "";
+        private bool _busyInExplore;
+        private readonly Dictionary<string, (long total, long library)> _sizes = new Dictionary<string, (long, long)>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _measuring = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         [MenuItem("Tools/Game Spelunker %#g", priority = 1)]
         public static SpelunkerWindow Open()
@@ -70,6 +75,7 @@ namespace GameSpelunker
             foreach (var icon in _gameIcons.Values)
                 if (icon != null) DestroyImmediate(icon);
             _gameIcons.Clear();
+            ReleaseImages();
         }
 
         private Texture2D? GameIcon(string folder)
@@ -134,6 +140,9 @@ namespace GameSpelunker
                 page.Add(ExtractCard(_report, consent));
             if (_report != null && HasExport())
                 page.Add(ExploreCard());
+            if (ExtractionsCard() is { } extractions)
+                page.Add(extractions);
+            page.Add(SettingsCard());
 
             page.schedule.Execute(() => page.scrollOffset = new Vector2(0, scroll));
         }
@@ -196,19 +205,11 @@ namespace GameSpelunker
             {
                 if (_found.Count == 0)
                     card.Add(Hint("No Unity games found in Steam, Epic, GOG or itch.io folders. Use \"Choose folder…\"."));
-                var list = Css(new VisualElement(), "gs-game-list");
-                foreach (var game in _found)
-                {
-                    var item = Css(new Button(() => SelectGame(game.Folder)), "gs-game");
-                    var icon = GameIcon(game.Folder);
-                    item.Add(Css(new Image { image = icon != null ? icon : Icon("d_UnityEditor.GameView"), scaleMode = ScaleMode.ScaleAndCrop },
-                        icon != null ? "gs-game-icon gs-game-icon--art" : "gs-game-icon"));
-                    item.Add(Css(new Label(game.Name), "gs-game-name"));
-                    item.Add(Chip(game.Source, "gs-chip--muted"));
-                    if (string.Equals(game.Folder, _gamePath, StringComparison.OrdinalIgnoreCase)) item.AddToClassList("gs-game--selected");
-                    list.Add(item);
-                }
+                else
+                    card.Add(GameListTools(card));
+                var list = Css(new VisualElement { name = "game-list" }, "gs-game-list");
                 card.Add(list);
+                RefreshGameList(card);
             }
             return card;
         }
@@ -247,7 +248,17 @@ namespace GameSpelunker
             card.Add(ChipRow("Mod support", r.ModLoaders, "gs-chip--ok", "no mod loader installed"));
 
             if (r.UnityVersion != null && versionDetail == "not installed")
-                card.Add(Hint($"Install Unity {r.UnityVersion} with Unity Hub to open the extracted project without upgrading it."));
+            {
+                card.Add(Hint($"Opening the extracted project with the game's own Unity {r.UnityVersion} keeps the game's code and libraries working as they are. " +
+                              (UnityEditorInstaller.CanInstall ? "Game Spelunker can install it with Unity Hub." : "Install Unity Hub (unity.com/download) so Game Spelunker can install it.")));
+                var install = Button($"Install Unity {r.UnityVersion}", () => InstallEditor(r.UnityVersion), "gs-button--primary", "d_Download-Available");
+                install.SetEnabled(!_busy && UnityEditorInstaller.CanInstall);
+                card.Add(Buttons(install));
+            }
+            else if (r.UnityVersion != null && versionDetail == "installed" && UnityEditorInstaller.NeedsLegacyActivation(r.UnityVersion))
+                card.Add(ActivationHint(r.UnityVersion));
+            if (_editorMessage.Length > 0)
+                card.Add(Css(new HelpBox(_editorMessage, _editorMessage.StartsWith("Failed", StringComparison.Ordinal) ? HelpBoxMessageType.Error : HelpBoxMessageType.Info), "gs-card-help"));
             foreach (var warning in r.Warnings)
                 card.Add(Css(new HelpBox(warning, HelpBoxMessageType.Info), "gs-card-help"));
             card.Add(Buttons(Button("Open game folder", () => EditorUtility.RevealInFinder(r.Executable ?? r.DataFolder), icon: "d_FolderOpened Icon")));
@@ -316,16 +327,18 @@ namespace GameSpelunker
             }
 
             bool ripperAvailable = AssetRipperInstaller.Executable != null || AssetRipperInstaller.CanAutoInstall;
+            var queue = Button(_busy ? "Extract after the current one" : "Add to queue", () => Enqueue(report), icon: "d_Toolbar Plus");
+            queue.SetEnabled(consent && ripperAvailable && !IsQueued(_output));
             if (_busy)
             {
                 card.Add(Css(new ProgressBar { value = _progress * 100, title = _busyText }, "gs-progress"));
-                card.Add(Buttons(Button("Cancel", () => _cts?.Cancel(), "gs-button--danger", "d_winbtn_win_close")));
+                card.Add(Buttons(Button("Cancel", () => _cts?.Cancel(), "gs-button--danger", "d_winbtn_win_close"), queue));
             }
             else
             {
                 var extract = Button("Extract", Extract, "gs-button--primary gs-button--big", "d_PlayButton");
                 extract.SetEnabled(consent && ripperAvailable);
-                card.Add(Buttons(extract, Button("Choose output…", () =>
+                card.Add(Buttons(extract, queue, Button("Choose output…", () =>
                 {
                     string folder = EditorUtility.OpenFolderPanel("Where to put the extracted game", _output, "");
                     if (!string.IsNullOrEmpty(folder)) { _output = folder; Rebuild(); }
@@ -333,6 +346,10 @@ namespace GameSpelunker
                 if (!consent) card.Add(Hint("Accept the notice at the top to enable extraction."));
                 else if (!ripperAvailable) card.Add(Hint("Select an AssetRipper executable below first."));
             }
+            if (_stages.Count > 0 && !_busyInExplore)
+                card.Add(StagesView());
+            if (_queue.Count > 0)
+                card.Add(QueueView());
             card.Add(AssetRipperSection());
 
             if (_message.Length > 0)
@@ -373,7 +390,10 @@ namespace GameSpelunker
                 Button("Open folder", () => EditorUtility.RevealInFinder(ExtractedProject.ProjectFolder(_output)), icon: "d_FolderOpened Icon")));
             if (version != null && editor == null)
                 card.Add(Hint($"The game was made with Unity {version}, which is not installed. Another version works for exploring, but Unity will upgrade the project."));
+            else if (version != null && UnityEditorInstaller.NeedsLegacyActivation(version))
+                card.Add(ActivationHint(version));
 
+            card.Add(HealthSection());
             card.Add(ImportSection(version));
 
             string assets = Path.Combine(ExtractedProject.ProjectFolder(_output), "Assets");
@@ -397,8 +417,12 @@ namespace GameSpelunker
                     grid.Add(chip);
                 }
                 card.Add(grid);
+                card.Add(ScenesSection(assets));
+                card.Add(TexturesSection(assets));
             }
 
+            if (CodeFixesSection() is { } fixes)
+                card.Add(fixes);
             var scripts = ExtractedProject.FindScripts(_output);
             card.Add(Css(new Label($"Game scripts · {scripts.Count}"), "gs-subsection"));
             var filter = new ToolbarSearchField { value = _scriptFilter };
@@ -411,6 +435,225 @@ namespace GameSpelunker
             if (scripts.Count == 0)
                 card.Add(Hint("No game scripts in this export (raw assets mode, or the game has none)."));
             return card;
+        }
+
+        private static string ExtractionsRoot => Settings.OutputRoot;
+
+        private VisualElement? ExtractionsCard()
+        {
+            if (!Directory.Exists(ExtractionsRoot))
+                return null;
+            var folders = Directory.GetDirectories(ExtractionsRoot)
+                .Where(d => Directory.Exists(Path.Combine(d, "ExportedProject")) || Directory.Exists(Path.Combine(d, "AuxiliaryFiles")))
+                .OrderByDescending(Directory.GetLastWriteTimeUtc)
+                .ToList();
+            if (folders.Count == 0)
+                return null;
+
+            long total = folders.Sum(f => _sizes.TryGetValue(f, out var s) ? s.total : 0);
+            var card = Card("d_SaveAs", "Your extractions", (total > 0 ? BuildInspector.FormatSize(total) : folders.Count + " folder(s)", "gs-chip--muted"));
+            card.Add(Css(new Label("Each extraction is a full Unity project. The Unity cache (Library folder) is rebuilt the next time the project opens, " +
+                                   "so freeing it is safe; deleting removes the extraction for good."), "gs-text"));
+            foreach (var folder in folders)
+            {
+                MeasureLater(folder);
+                var row = Css(new VisualElement(), "gs-disk-row");
+                string name = Path.GetFileName(folder);
+                bool current = string.Equals(Path.GetFullPath(folder).TrimEnd('\\', '/'), _output.Length > 0 ? Path.GetFullPath(_output).TrimEnd('\\', '/') : "", StringComparison.OrdinalIgnoreCase);
+                row.Add(Css(new Label(current ? name + "  (selected)" : name), "gs-disk-name"));
+                string version = ExtractedProject.UnityVersionOf(folder) ?? "";
+                if (version.Length > 0) row.Add(Chip(version, "gs-chip--muted"));
+                row.Add(Css(new Label(_sizes.TryGetValue(folder, out var size) ? BuildInspector.FormatSize(size.total) : "…"), "gs-disk-size"));
+                var open = Button("Select", () => SelectExtraction(folder), icon: "d_FolderOpened Icon");
+                open.SetEnabled(!_busy && !current);
+                row.Add(open);
+                string library = Path.Combine(ExtractedProject.ProjectFolder(folder), "Library");
+                if (_sizes.TryGetValue(folder, out var measured) && measured.library > 0)
+                {
+                    var free = Button("Free " + BuildInspector.FormatSize(measured.library), () => DeleteFolder(folder, library, "the Unity cache of " + name), icon: "d_TreeEditor.Trash");
+                    free.tooltip = "Deletes the Library folder. Unity rebuilds it the next time the project opens (that first open is slower).";
+                    free.SetEnabled(!_busy);
+                    row.Add(free);
+                }
+                var delete = Button("Delete", () => DeleteFolder(folder, folder, "the whole extraction " + name), "gs-button--danger", "d_winbtn_win_close");
+                delete.SetEnabled(!_busy);
+                row.Add(delete);
+                card.Add(row);
+            }
+            return card;
+        }
+
+        private void MeasureLater(string folder)
+        {
+            if (_sizes.ContainsKey(folder) || !_measuring.Add(folder))
+                return;
+            Task.Run(() =>
+            {
+                long total = FolderSize(folder);
+                long library = FolderSize(Path.Combine(ExtractedProject.ProjectFolder(folder), "Library"));
+                RunOnMain(() => { _sizes[folder] = (total, library); _measuring.Remove(folder); });
+            });
+        }
+
+        private static long FolderSize(string folder)
+        {
+            if (!Directory.Exists(folder))
+                return 0;
+            long size = 0;
+            try
+            {
+                foreach (var file in new DirectoryInfo(folder).EnumerateFiles("*", SearchOption.AllDirectories))
+                    size += file.Length;
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { }
+            return size;
+        }
+
+        private void DeleteFolder(string extraction, string target, string what)
+        {
+            if (IsOpenInUnity(ExtractedProject.ProjectFolder(extraction)))
+            {
+                EditorUtility.DisplayDialog("Game Spelunker", "This project is open in Unity. Close it first.", "OK");
+                return;
+            }
+            if (!EditorUtility.DisplayDialog("Game Spelunker", $"Delete {what}?\n\n{target}\n\nThis cannot be undone.", "Delete", "Cancel"))
+                return;
+            try
+            {
+                Directory.Delete(target, true);
+                if (string.Equals(target, extraction, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(Path.GetFullPath(extraction), _output.Length > 0 ? Path.GetFullPath(_output) : "", StringComparison.OrdinalIgnoreCase))
+                    _output = "";
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                EditorUtility.DisplayDialog("Game Spelunker", "Could not delete everything: " + ex.Message, "OK");
+            }
+            _sizes.Remove(extraction);
+            Rebuild();
+        }
+
+        private void SelectExtraction(string folder)
+        {
+            string note = Path.Combine(folder, "AuxiliaryFiles", "GameSpelunker-game.txt");
+            string? data = File.Exists(note) ? File.ReadAllText(note).Trim() : null;
+            string? game = data != null ? Path.GetDirectoryName(data.TrimEnd('\\', '/')) : null;
+            if (game != null && Directory.Exists(game))
+                SelectGame(game, rebuild: false);
+            _output = folder;
+            Rebuild();
+        }
+
+        private VisualElement HealthSection()
+        {
+            var box = Css(new VisualElement(), "gs-import");
+            var head = Css(new VisualElement(), "gs-card-head");
+            head.Add(Css(new Image { image = Icon("d_PlayButton") }, "gs-card-icon"));
+            head.Add(Css(new Label("Health"), "gs-subsection"));
+            box.Add(head);
+            box.Add(Css(new Label("Check the project presses Play in the background for about a minute, takes screenshots and counts errors. " +
+                                  "Repair again redoes the preparation, the code fixes and the material repair without extracting the game again."), "gs-text"));
+
+            box.Add(HealthDashboard());
+            if (_busy && _busyInExplore)
+                box.Add(Css(new ProgressBar { value = _progress * 100, title = _busyText }, "gs-progress"));
+
+            var check = Button("Check the project", CheckProject, "gs-button--primary", "d_PlayButton");
+            var repair = Button("Repair again", RepairAgain, icon: "d_Refresh");
+            check.SetEnabled(!_busy);
+            repair.SetEnabled(!_busy);
+            var buttons = new List<Button> { check, repair };
+            if (_busy && _busyInExplore)
+                buttons.Add(Button("Cancel", () => _cts?.Cancel(), "gs-button--danger", "d_winbtn_win_close"));
+            box.Add(Buttons(buttons.ToArray()));
+            if (_exploreMessage.Length > 0)
+                box.Add(Css(new HelpBox(_exploreMessage, _exploreMessage.StartsWith("Failed", StringComparison.Ordinal) ? HelpBoxMessageType.Error : HelpBoxMessageType.Info), "gs-card-help"));
+            return box;
+        }
+
+        private void RunInExplore(string start, Func<CancellationToken, Task<string>> work)
+        {
+            if (IsOpenInUnity(ExtractedProject.ProjectFolder(_output)))
+            {
+                _exploreMessage = "Failed: the project is open in Unity. Close it first.";
+                Rebuild();
+                return;
+            }
+            _busy = true;
+            _busyInExplore = true;
+            _busyText = start;
+            _progress = 0;
+            _exploreMessage = "";
+            _cts = new CancellationTokenSource();
+            var token = _cts.Token;
+            Task.Run(async () =>
+            {
+                try
+                {
+                    string done = await work(token).ConfigureAwait(false);
+                    RunOnMain(() => _exploreMessage = done);
+                }
+                catch (Exception ex) when (token.IsCancellationRequested && (ex is OperationCanceledException || ex is ObjectDisposedException))
+                {
+                    RunOnMain(() => _exploreMessage = "Cancelled.");
+                }
+                catch (Exception ex)
+                {
+                    RunOnMain(() => _exploreMessage = "Failed: " + ex.Message);
+                }
+                finally
+                {
+                    RunOnMain(() => { _busy = false; _busyInExplore = false; });
+                }
+            });
+            Rebuild();
+        }
+
+        private static bool IsOpenInUnity(string project) => File.Exists(Path.Combine(project, "Temp", "UnityLockfile")) && IsLocked(Path.Combine(project, "Temp", "UnityLockfile"));
+
+        private static bool IsLocked(string file)
+        {
+            try
+            {
+                using var stream = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                return false;
+            }
+            catch (IOException) { return true; }
+            catch (UnauthorizedAccessException) { return true; }
+        }
+
+        private void CheckProject()
+        {
+            string output = _output;
+            string editor = ExtractedProject.EditorFor(output, EditorApplication.applicationPath);
+            string tools = ExtractedProject.ToolsSource();
+            RunInExplore("Pressing Play in the background… (opening a large project takes a few minutes)", async token =>
+            {
+                var result = await ProjectChecker.CheckAsync(output, editor, tools, token).ConfigureAwait(false);
+                return result.Verdict + ".";
+            });
+        }
+
+        private void RepairAgain()
+        {
+            string output = _output;
+            string editor = ExtractedProject.EditorFor(output, EditorApplication.applicationPath);
+            string tools = ExtractedProject.ToolsSource();
+            GameCodeCompiler.Passes = Settings.CompilePasses;
+            RunInExplore("Preparing the project…", async token =>
+            {
+                var prepared = ExtractedProject.PrepareForOpening(output, tools);
+                string codeReport = "";
+                if (prepared.HasGameCode)
+                {
+                    var code = await GameCodeCompiler.MakeItCompileAsync(output, editor,
+                        new Progress<string>(m => RunOnMain(() => { _progress = 0f; _busyText = m; })), token).ConfigureAwait(false);
+                    codeReport = code.Compiles ? " The game's code compiles." : $" The game's code still has {code.RemainingErrors} compile error(s).";
+                }
+                var importProgress = new Progress<float>(p => RunOnMain(() => { _progress = p; _busyText = $"Importing into Unity and repairing… {p:P0}"; }));
+                string summary = await ExtractedProject.ImportAndRepairAsync(output, editor, importProgress, token).ConfigureAwait(false);
+                return "Repaired: " + summary + codeReport;
+            });
         }
 
         private VisualElement ImportSection(string? exportVersion)
@@ -554,6 +797,8 @@ namespace GameSpelunker
             _message = "";
             _importTarget = "";
             _importMessage = "";
+            _editorMessage = "";
+            _exploreMessage = "";
             _log.Clear();
             try
             {
@@ -572,7 +817,7 @@ namespace GameSpelunker
         private static string DefaultOutput(BuildReport report)
         {
             string safe = new string(report.Name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c).ToArray()).Trim();
-            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Game Spelunker", safe);
+            return Path.Combine(Settings.OutputRoot, safe);
         }
 
         private void InstallAssetRipper()
@@ -607,7 +852,53 @@ namespace GameSpelunker
             Rebuild();
         }
 
-        private static string DownloadText => $"Downloading AssetRipper {AssetRipperInstaller.Version} ({AssetRipperInstaller.DownloadSize})…";
+        private VisualElement ActivationHint(string version)
+        {
+            var box = Css(new VisualElement(), "gs-import");
+            box.Add(Css(new HelpBox($"Unity {version} uses the old license system and is not activated yet, so it cannot import or repair in the background. " +
+                                    "Open it once, sign in, choose a Personal license, then close it.", HelpBoxMessageType.Warning), "gs-card-help"));
+            box.Add(Buttons(Button($"Open Unity {version} to activate it", () =>
+            {
+                try { UnityEditorInstaller.OpenOnceToActivate(version); }
+                catch (Exception ex) when (ex is InvalidOperationException || ex is System.ComponentModel.Win32Exception) { _editorMessage = "Failed: " + ex.Message; }
+                Rebuild();
+            }, icon: "d_UnityLogo"), Button("Done, check again", Rebuild, icon: "d_Refresh")));
+            return box;
+        }
+
+        private void InstallEditor(string version)
+        {
+            _busy = true;
+            _busyText = $"Installing Unity {version}…";
+            _editorMessage = $"Installing Unity {version} with Unity Hub…";
+            _cts = new CancellationTokenSource();
+            var token = _cts.Token;
+            var progress = new Progress<string>(m => RunOnMain(() => { _busyText = m; _editorMessage = m; }));
+            Task.Run(async () =>
+            {
+                try
+                {
+                    string editor = await UnityEditorInstaller.InstallAsync(version, progress, token).ConfigureAwait(false);
+                    RunOnMain(() => _editorMessage = $"Unity {version} is installed ({editor})." +
+                                                     (UnityEditorInstaller.NeedsLegacyActivation(version) ? " It still needs to be activated once (see below)." : ""));
+                }
+                catch (Exception ex) when (token.IsCancellationRequested && ex is OperationCanceledException)
+                {
+                    RunOnMain(() => _editorMessage = "Cancelled.");
+                }
+                catch (Exception ex)
+                {
+                    RunOnMain(() => _editorMessage = "Failed to install Unity " + version + ": " + ex.Message);
+                }
+                finally
+                {
+                    RunOnMain(() => _busy = false);
+                }
+            });
+            Rebuild();
+        }
+
+        private static string DownloadText =>$"Downloading AssetRipper {AssetRipperInstaller.Version} ({AssetRipperInstaller.DownloadSize})…";
 
         private IProgress<float> DownloadProgress() => new Progress<float>(p => RunOnMain(() =>
         {
@@ -615,24 +906,31 @@ namespace GameSpelunker
             _busyText = DownloadText;
         }));
 
-        private void Extract()
+        private void Extract() => Extract(true);
+
+        private void Extract(bool ask)
         {
             if (_report == null)
                 return;
 
             if (Directory.Exists(_output) && Directory.EnumerateFileSystemEntries(_output).Any())
             {
-                bool previousExport = Directory.Exists(Path.Combine(_output, "ExportedProject")) || Directory.Exists(Path.Combine(_output, "AuxiliaryFiles"))
-                                      || (Directory.Exists(Path.Combine(_output, "Assets")) && Directory.Exists(Path.Combine(_output, "ProjectSettings")));
-                if (!previousExport)
+                if (!IsPreviousExport(_output))
                 {
                     _message = "Failed: the output folder is not empty. Choose an empty folder.";
                     Rebuild();
                     return;
                 }
-                if (!EditorUtility.DisplayDialog("Game Spelunker", $"Replace the previous extraction in\n{_output} ?", "Replace", "Cancel"))
+                if (ask && !EditorUtility.DisplayDialog("Game Spelunker", $"Replace the previous extraction in\n{_output} ?", "Replace", "Cancel"))
                     return;
+                if (IsOpenInUnity(ExtractedProject.ProjectFolder(_output)))
+                {
+                    _message = "Failed: the previous extraction is open in Unity. Close it first.";
+                    Rebuild();
+                    return;
+                }
                 Directory.Delete(_output, true);
+                _sizes.Remove(_output);
             }
 
             var report = _report;
@@ -641,9 +939,12 @@ namespace GameSpelunker
             string? installed = AssetRipperInstaller.Executable;
             string tools = ExtractedProject.ToolsSource();
             string thisEditor = EditorApplication.applicationPath;
-            bool importInUnity = _importInUnity;
+            bool importInUnity = _importInUnity && mode == ExportMode.UnityProject;
+            bool check = importInUnity && Settings.CheckAfterExtracting;
+            GameCodeCompiler.Passes = Settings.CompilePasses;
             bool download = installed == null;
             _busy = true;
+            _busyInExplore = false;
             _busyText = download ? DownloadText : "Starting AssetRipper…";
             _progress = 0;
             _message = "";
@@ -651,9 +952,18 @@ namespace GameSpelunker
             _cts = new CancellationTokenSource();
             var token = _cts.Token;
             var progress = DownloadProgress();
+            var stages = new List<string>();
+            if (download) stages.Add(StageDownload);
+            stages.Add(StageExport);
+            if (mode == ExportMode.UnityProject) stages.Add(StagePrepare);
+            if (importInUnity) { stages.Add(StageCode); stages.Add(StageImport); }
+            if (check) stages.Add(StageCheck);
+            BeginStages(report.Name, stages);
+            if (download) StartStage(StageDownload);
 
             Task.Run(async () =>
             {
+                bool success = false;
                 string exe;
                 try
                 {
@@ -664,11 +974,13 @@ namespace GameSpelunker
                     RunOnMain(() =>
                     {
                         _message = token.IsCancellationRequested ? "Cancelled." : "Failed to install AssetRipper: " + ex.Message;
+                        FailStage(token.IsCancellationRequested ? "Cancelled" : ex.Message);
                         _busy = false;
+                        FinishRun(report.Name, false, token.IsCancellationRequested);
                     });
                     return;
                 }
-                RunOnMain(() => { _progress = 0; _busyText = "Starting AssetRipper…"; });
+                RunOnMain(() => { _progress = 0; _busyText = "Starting AssetRipper…"; StartStage(StageExport); });
                 var started = DateTime.Now;
 
                 using var session = new AssetRipperSession(exe);
@@ -687,7 +999,7 @@ namespace GameSpelunker
                 {
                     await session.StartAsync(token).ConfigureAwait(false);
                     RunOnMain(() => _busyText = "Loading game files…");
-                    await session.LoadAsync(report.DataFolder, token).ConfigureAwait(false);
+                    await session.LoadAsync(report.LoadPath, token).ConfigureAwait(false);
                     RunOnMain(() => _busyText = "Exporting…");
                     await session.ExportAsync(output, mode, token).ConfigureAwait(false);
                     var seconds = (DateTime.Now - started).TotalSeconds;
@@ -695,11 +1007,8 @@ namespace GameSpelunker
                     if (mode == ExportMode.UnityProject)
                     {
                         session.Dispose();
-                        RunOnMain(() => { _progress = 0; _busyText = "Preparing the project…"; });
+                        RunOnMain(() => { _progress = 0; _busyText = "Preparing the project…"; StartStage(StagePrepare); });
                         var prepared = ExtractedProject.PrepareForOpening(output, tools, report.DataFolder);
-                        string gameCode = prepared.GameCodeOff
-                            ? " The game's decompiled code is switched off so the project always compiles (Tools → Game Spelunker → Enable Game Code in that project)."
-                            : "";
                         if (importInUnity)
                         {
                             string editor = ExtractedProject.EditorFor(output, thisEditor);
@@ -709,6 +1018,7 @@ namespace GameSpelunker
                                 _busyText = $"Importing into Unity and repairing… {p:P0} (large games take several minutes)";
                             }));
                             string codeReport = "";
+                            RunOnMain(() => { _progress = 0; StartStage(StageCode); });
                             if (prepared.HasGameCode)
                             {
                                 var compileProgress = new Progress<string>(m => RunOnMain(() => { _progress = 0f; _busyText = m; }));
@@ -716,33 +1026,55 @@ namespace GameSpelunker
                                 codeReport = code.Compiles
                                     ? $" The game's code compiles ({code.MembersStubbed} member(s) that could not be decompiled were stubbed, " +
                                       $"{code.FilesQuarantined} file(s) set aside; see AuxiliaryFiles/GameSpelunker-code-fixes.txt)."
-                                    : $" The game's code still has {code.RemainingErrors} compile error(s) (see AuxiliaryFiles/GameSpelunker-code-fixes.txt).";
+                                    : $" The game's code still has {code.RemainingErrors} compile error(s) and is switched off (see AuxiliaryFiles/GameSpelunker-code-fixes.txt).";
                             }
+                            else
+                            {
+                                RunOnMain(() => SkipStage(StageCode));
+                            }
+                            RunOnMain(() => { _progress = 0; StartStage(StageImport); });
                             string summary = await ExtractedProject.ImportAndRepairAsync(output, editor, importProgress, token).ConfigureAwait(false);
-                            done += " Imported into Unity and repaired, ready to open: " + summary + gameCode + codeReport;
+                            done += " Imported into Unity and repaired, ready to open: " + summary + codeReport;
+                            if (check)
+                            {
+                                RunOnMain(() => { _progress = 0; _busyText = "Pressing Play in the background…"; StartStage(StageCheck); });
+                                var result = await ProjectChecker.CheckAsync(output, editor, tools, token).ConfigureAwait(false);
+                                done += " Check: " + result.Verdict + ".";
+                            }
                         }
                         else
                         {
-                            done += " Materials are repaired the first time the project opens." + gameCode;
+                            done += " Materials are repaired the first time the project opens." +
+                                    (prepared.GameCodeOff ? " The game's code is switched off until you enable it (Tools → Game Spelunker → Enable Game Code)." : "");
                         }
                     }
-                    RunOnMain(() => _message = done);
+                    success = true;
+                    RunOnMain(() => { _message = done; CompleteStages(); });
                 }
                 catch (Exception ex) when (token.IsCancellationRequested && (ex is OperationCanceledException || ex is ObjectDisposedException || ex is System.Net.Http.HttpRequestException))
                 {
-                    RunOnMain(() => _message = "Cancelled.");
+                    RunOnMain(() => { _message = "Cancelled."; FailStage("Cancelled"); });
                 }
                 catch (Exception ex)
                 {
-                    RunOnMain(() => _message = "Failed: " + ex.Message);
+                    RunOnMain(() => { _message = "Failed: " + ex.Message; FailStage(ex.Message); });
                 }
                 finally
                 {
-                    RunOnMain(() => _busy = false);
+                    bool cancelled = token.IsCancellationRequested;
+                    RunOnMain(() =>
+                    {
+                        _busy = false;
+                        FinishRun(report.Name, success, cancelled);
+                    });
                 }
             });
             Rebuild();
         }
+
+        private static bool IsPreviousExport(string folder) =>
+            Directory.Exists(Path.Combine(folder, "ExportedProject")) || Directory.Exists(Path.Combine(folder, "AuxiliaryFiles"))
+            || (Directory.Exists(Path.Combine(folder, "Assets")) && Directory.Exists(Path.Combine(folder, "ProjectSettings")));
 
         private static T Css<T>(T element, string classNames) where T : VisualElement
         {

@@ -19,6 +19,7 @@ namespace GameSpelunker
     {
         public string GameFolder = "";
         public string DataFolder = "";
+        public string LoadPath => Backend == ScriptingBackend.IL2CPP && Directory.Exists(GameFolder) ? GameFolder : DataFolder;
         public string? Executable;
         public string Name = "";
         public string? Company;
@@ -96,6 +97,25 @@ namespace GameSpelunker
             return report;
         }
 
+        public static BuildReport? Peek(string path)
+        {
+            try
+            {
+                string? data = FindDataFolder(path);
+                if (data == null)
+                    return null;
+                var report = new BuildReport { GameFolder = Path.GetDirectoryName(data)!, DataFolder = data, Name = Path.GetFileName(data).Replace("_Data", "") };
+                ReadAppInfo(report);
+                report.UnityVersion = ReadUnityVersion(report);
+                DetectBackend(report);
+                return report;
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                return null;
+            }
+        }
+
         private static void ReadAppInfo(BuildReport report)
         {
             string appInfo = Path.Combine(report.DataFolder, "app.info");
@@ -142,8 +162,9 @@ namespace GameSpelunker
             if (hasIl2CppData || hasGameAssembly)
             {
                 report.Backend = ScriptingBackend.IL2CPP;
-                report.Warnings.Add("IL2CPP build: game code is compiled to native code. AssetRipper recovers classes, fields and " +
-                                    "method signatures, but method bodies are empty.");
+                report.Warnings.Add("IL2CPP build: the game's code is compiled to native code. Scenes, prefabs, materials and every " +
+                                    "component's settings come back, and the scripts keep their classes, fields and method names, but their bodies " +
+                                    "are empty: you can explore the game in the editor, but in Play mode its logic does nothing.");
             }
             else if (Directory.Exists(managed))
             {

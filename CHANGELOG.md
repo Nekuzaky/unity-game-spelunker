@@ -6,6 +6,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ## [Unreleased]
 
 ### Added
+- **Games open in their own Unity version.** When the game's exact editor is installed, the export is prepared for it:
+  no API migration, the game's original managed libraries (Rewired, PlayMaker, Bolt…) instead of AssetRipper's
+  rewritten copies, no assembly definitions before Unity 2017.3, and no copy of the UnityScript/Boo libraries old
+  editors already ship. The Forest (Unity 5.6.5p4) compiles with zero errors and reaches its title scene in Play mode.
+- **Install the game's Unity from the window.** The build report offers to install the game's exact Unity version
+  through Unity Hub (headless), and old versions that still need the legacy license get an activate-once flow.
+- **Extraction stages.** Extracting shows each stage (export, prepare, make the code compile, import and repair,
+  check) with its state, elapsed time and an estimate of the time left, plus a notification (sound and taskbar flash)
+  when it ends.
+- **Extraction queue.** Add games to a queue; each one starts as soon as the previous extraction finishes.
+- **Health dashboard.** The Explore card sums up the project as tiles (Play mode, game code, materials, custom
+  shaders), shows the screenshots taken in Play mode, the most frequent errors, and a **Copy report** button.
+- **Check the project.** One click presses Play in the background for about a minute, takes screenshots, counts
+  errors and writes `AuxiliaryFiles/GameSpelunker-check.txt`; it can also run automatically after each extraction.
+- **Repair again** redoes the preparation, the code fixes and the material repair on an existing extraction without
+  extracting the game again.
+- The game list has a search box, sorting (name, Unity version, scripting, extracted first) and badges: Mono or
+  IL2CPP, the game's Unity version (green when installed) and whether it is already extracted.
+- The Explore card lists the scenes (biggest first) with **Open in Unity** per scene, previews the extracted textures,
+  and lists every code fix with a link that opens the file in your editor.
+- **Your extractions.** A card lists every extraction with its size, frees the Unity cache (Library) or deletes the
+  extraction, and reopens any of them.
+- **Settings.** Extractions folder, check-after-extract, end-of-extraction notification and the number of code fix
+  passes, in a foldout at the bottom of the window.
+- Extracted projects open on the game's biggest scene the first time, with the camera over the terrain.
+- IL2CPP games load from the game folder (so `GameAssembly.dll` is found) and the build report explains exactly what
+  comes back from such a build.
+
+### Fixed
+- Native plugins that are not .NET assemblies (Broforce's ConsoleUtils.dll…) no longer break the plugin copy: the
+  check reads the PE header itself instead of loading the file.
+- The compile loop no longer quarantines Game Spelunker's own tools, stops on errors that are not tied to a script
+  (duplicate assemblies…), and renames decompiled members that share their type's name instead of quarantining the
+  file and everything that uses it.
+- A failed compile loop leaves the game code switched off instead of half on.
 - **The game's code is made to compile.** After the import, Game Spelunker compiles the decompiled code in the
   background (with the game code switched on), and repeats until it compiles: members the decompiler could not rebuild
   are stubbed (same signature, a warning or a NotImplementedException inside), and files that cannot be stubbed are

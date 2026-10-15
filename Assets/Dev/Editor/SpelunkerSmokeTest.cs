@@ -45,7 +45,7 @@ namespace GameSpelunker
                         if (percent >= lastPercent + 25) { lastPercent = percent; Debug.Log($"[Game Spelunker] {phase} {percent}%"); }
                     };
                     session.StartAsync(CancellationToken.None).Wait();
-                    session.LoadAsync(report.DataFolder, CancellationToken.None).Wait();
+                    session.LoadAsync(report.LoadPath, CancellationToken.None).Wait();
                     session.ExportAsync(output, ExportMode.UnityProject, CancellationToken.None).Wait();
                 }
 
@@ -112,7 +112,7 @@ namespace GameSpelunker
                         if (percent >= lastPercent + 10) { lastPercent = percent; Debug.Log($"[Game Spelunker] {phase} {percent}%"); }
                     };
                     session.StartAsync(CancellationToken.None).Wait();
-                    session.LoadAsync(report.DataFolder, CancellationToken.None).Wait();
+                    session.LoadAsync(report.LoadPath, CancellationToken.None).Wait();
                     session.ExportAsync(output, ExportMode.UnityProject, CancellationToken.None).Wait();
                 }
                 var prepared = ExtractedProject.PrepareForOpening(output, ExtractedProject.ToolsSource(), report.DataFolder);
@@ -153,6 +153,23 @@ namespace GameSpelunker
                           $"{code.FilesQuarantined} quarantined, {code.RemainingErrors} error(s) left");
                 string ready = ExtractedProject.ImportAndRepairAsync(export, editor, null, CancellationToken.None).GetAwaiter().GetResult();
                 Debug.Log($"[Game Spelunker] Imported and repaired: {ready}");
+                EditorApplication.Exit(0);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex is AggregateException ae && ae.InnerException != null ? ae.InnerException : ex);
+                EditorApplication.Exit(1);
+            }
+        }
+
+        public static void Check()
+        {
+            try
+            {
+                string export = Arg("-gsExport") ?? throw new ArgumentException("-gsExport is required");
+                string editor = ExtractedProject.EditorFor(export, EditorApplication.applicationPath);
+                var result = ProjectChecker.CheckAsync(export, editor, ExtractedProject.ToolsSource(), CancellationToken.None).GetAwaiter().GetResult();
+                Debug.Log("[Game Spelunker] " + ProjectChecker.Describe(result).Replace("\n", "\n[Game Spelunker] "));
                 EditorApplication.Exit(0);
             }
             catch (Exception ex)

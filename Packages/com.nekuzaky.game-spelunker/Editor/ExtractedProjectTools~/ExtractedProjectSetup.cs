@@ -22,6 +22,8 @@ namespace GameSpelunker
         {
             if (!File.Exists(Marker))
                 EditorApplication.delayCall += RepairOnce;
+            if (!UnityEditorInternal.InternalEditorUtility.inBatchMode && (!File.Exists(OpenedMarker) || File.Exists(OpenRequest)))
+                EditorApplication.delayCall += OpenMainSceneOnce;
 #if UNITY_2017_2_OR_NEWER
             if (!UnityEditorInternal.InternalEditorUtility.inBatchMode && HasGameCodeSwitch())
                 EditorApplication.playModeStateChanged += change => { if (change == PlayModeStateChange.ExitingEditMode) WarnBeforePlay(); };
@@ -69,6 +71,42 @@ namespace GameSpelunker
             if (HasGameCodeSwitch() && !GameCodeEnabled())
                 Debug.Log("[Game Spelunker] The game's decompiled code is switched off: scenes, prefabs and assets work, but " +
                           "nothing runs in Play mode. Tools > Game Spelunker > Enable Game Code compiles it (it often needs fixes).");
+        }
+
+        private const string OpenedMarker = "Library/GameSpelunker-opened.txt";
+        private const string OpenRequest = "Library/GameSpelunker-open.txt";
+
+        private static void OpenMainSceneOnce()
+        {
+#if UNITY_2017_1_OR_NEWER
+            if (EditorApplication.isCompiling || EditorApplication.isUpdating || !File.Exists(Marker))
+#else
+            if (EditorApplication.isCompiling || !File.Exists(Marker))
+#endif
+            {
+                EditorApplication.delayCall += OpenMainSceneOnce;
+                return;
+            }
+            string requested = File.Exists(OpenRequest) ? File.ReadAllText(OpenRequest).Trim() : null;
+            if (requested != null)
+                File.Delete(OpenRequest);
+            else if (File.Exists(OpenedMarker))
+                return;
+            File.WriteAllText(OpenedMarker, "The main scene was opened once by Game Spelunker.\n");
+            string main = !string.IsNullOrEmpty(requested) && File.Exists(requested) ? requested
+                : string.IsNullOrEmpty(UnityEngine.SceneManagement.SceneManager.GetActiveScene().path) ? ProjectCheck.MainScene() : null;
+            if (main == null)
+                return;
+            UnityEditor.SceneManagement.EditorSceneManager.OpenScene(main, UnityEditor.SceneManagement.OpenSceneMode.Single);
+            Debug.Log("[Game Spelunker] Opened the game's biggest scene: " + main);
+            var terrain = Terrain.activeTerrain;
+            var view = SceneView.lastActiveSceneView;
+            if (terrain != null && terrain.terrainData != null && view != null)
+            {
+                var center = terrain.transform.position + terrain.terrainData.size * 0.5f;
+                center.y = terrain.SampleHeight(center) + terrain.transform.position.y;
+                view.LookAt(center, Quaternion.Euler(35f, 45f, 0f), 250f);
+            }
         }
 
         private static MaterialRepairReport Repair()
