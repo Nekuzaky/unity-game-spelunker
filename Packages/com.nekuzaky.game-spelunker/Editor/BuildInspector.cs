@@ -43,7 +43,11 @@ namespace GameSpelunker
     /// </summary>
     public static class BuildInspector
     {
-        private static readonly Regex VersionPattern = new Regex(@"(?:20\d\d|[56]\d{3})\.\d+\.\d+[abfpx]\d+", RegexOptions.Compiled);
+        /// <summary>
+        /// Unity versions: 3.x to 5.x (5.6.5p4), 2017 to 2023 (2022.3.21f1), then 6000 (6000.3.13f1). Asset bundles
+        /// also carry the format string "5.x.x", which has no digits after the major and is not matched.
+        /// </summary>
+        private static readonly Regex VersionPattern = new Regex(@"(?<!\d)(?:20\d\d|6\d{3}|[345])\.\d+\.\d+[abfpx]\d+", RegexOptions.Compiled);
 
         /// <summary>Assemblies that ship with every Unity game: not interesting when learning about a specific game.</summary>
         private static readonly string[] EnginePrefixes =

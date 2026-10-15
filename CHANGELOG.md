@@ -10,6 +10,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
   Steam. They come from Steam's local library cache (`appcache/librarycache`): nothing is downloaded.
 
 ### Fixed
+- The build report showed Unity **?** for games made with Unity 3, 4 or 5 (for example 5.6.5p4): only versions
+  starting with a year or 6000 were recognised.
 - **Extract** failed with "GetString can only be called from the main thread": AssetRipper's location was read from
   EditorPrefs on a worker thread. It is now read before the extraction starts.
 
